@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const main=fs.readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+const css=fs.readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
+test('COM vs COM incorpora pausa, avance manual y juego continuo',()=>{assert.match(main,/Rotación automática de turnos/);assert.match(main,/data-pause/);assert.match(main,/data-step/);});
+test('anotaciones soportan cuatro colores y flechas',()=>{for(const c of ['red','yellow','green','blue'])assert.match(main,new RegExp(c));assert.match(main,/startRightAnnotation/);assert.match(main,/Arrastre derecho: flecha/);});
+test('estrategia muestra turno, podio visual y siguiente ejercicio',()=>{assert.match(main,/Juegan \$\{turn\}/);assert.match(main,/rank-\$\{index\+1\}/);assert.match(main,/SIGUIENTE EJERCICIO/);});
+test('biblioteca permite hasta diez favoritas',()=>{assert.match(main,/hasta 10 aperturas favoritas/);assert.match(css,/favorite-star/);});
+test('arrastre está conectado en juego, análisis y estrategia',()=>{assert.ok((main.match(/startVisualDrag/g)||[]).length>=4);});

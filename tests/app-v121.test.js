@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const main=fs.readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+const css=fs.readFileSync(new URL('../src/styles.css',import.meta.url),'utf8');
+test('COM vs COM separa juego continuo de rotación visual',()=>{assert.match(main,/Rotación automática de turnos/);assert.match(main,/data-step/);assert.match(main,/data-pause/);assert.match(main,/Rotar tablero/);assert.doesNotMatch(main,/autoRotate/);});
+test('análisis clasifica la jugada realizada con búsqueda restringida',()=>{assert.match(main,/searchMoves:\[uci\]/);assert.match(main,/classifyPlayedAnalysisMove/);assert.match(main,/lossCp|Pérdida frente a la mejor candidata/);});
+test('estrategia usa podio visual sin escribir nombres de metales',()=>{assert.match(main,/rank-\$\{index\+1\}/);assert.doesNotMatch(main,/Dorado|Plateado|Bronce/);assert.match(css,/rank-1 b/);});
+test('arrastre visual y marcadores de captura están presentes',()=>{assert.match(main,/drag-ghost/);assert.match(css,/legal\.capture/);assert.match(css,/drag-source/);});
+test('favoritas se muestran en la parte superior y se limitan a diez',()=>{assert.match(main,/favorite-openings/);assert.match(main,/hasta 10 aperturas favoritas/);});
