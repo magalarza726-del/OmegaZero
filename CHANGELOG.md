@@ -1,3 +1,10 @@
+# v2.5.1
+
+- Rutas universales `public/` compatibles con GitHub Pages desde `main/(root)` y con la compilación `dist/`.
+- Reparados logo, piezas, manifiesto y Stockfish cuando el repositorio se publica bajo una subcarpeta.
+- Publicación web sin GitHub Actions disponible para usuarios que suben archivos desde el navegador.
+- Caché de recursos invalidada con la versión 2.5.1.
+
 # Historial de cambios
 
 ## 2.5.0

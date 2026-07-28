@@ -1,4 +1,6 @@
 import { ENGINE_PROFILE } from './constants.js';
+import { APP_VERSION } from './version.js';
+import { publicAsset } from './publicAssets.js';
 
 export class StockfishEngine {
   constructor(onStatus = () => {}) {
@@ -26,10 +28,11 @@ export class StockfishEngine {
     this.onStatus('Cargando Stockfish 18…');
     // Ruta relativa: funciona desde INICIAR.bat y también si la carpeta dist se
     // publica bajo un subdirectorio. Las rutas absolutas rompían los recursos.
-    this.worker = new Worker('./engine/stockfish-18-lite-single.js');
+    const workerUrl = publicAsset('engine/stockfish-18-lite-single.js', APP_VERSION);
+    this.worker = new Worker(workerUrl);
     this.worker.onmessage = (event) => this.handleMessage(String(event.data));
     this.worker.onerror = (error) => {
-      this.onStatus('No se pudo iniciar Stockfish');
+      this.onStatus(`No se pudo iniciar Stockfish · revisa public/engine`);
       this.pending?.reject(error);
       this.pending = null;
     };

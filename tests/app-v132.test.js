@@ -29,8 +29,8 @@ test('un error de vista muestra recuperación y no una pantalla negra',()=>{
 });
 
 test('la versión visible y el iniciador coinciden con el paquete',()=>{
-  assert.equal(pkg.version,'2.5.0');
-  assert.match(version,/APP_VERSION = '2\.5\.0'/);
-  assert.match(bat,/v2\.5\.0/);
-  assert.match(html,/OmegaZero v2\.5\.0/);
+  assert.equal(pkg.version,'2.5.1');
+  assert.match(version,/APP_VERSION = '2\.5\.1'/);
+  assert.match(bat,/v2\.5\.1/);
+  assert.match(html,/OmegaZero v2\.5\.1/);
 });

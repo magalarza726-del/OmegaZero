@@ -1,4 +1,4 @@
-# OmegaZero v2.5.0 — Aplicación web personal
+# OmegaZero v2.5.1 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -17,14 +17,18 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 
 ## Publicar en GitHub Pages
 
-La publicación está automatizada. Consulta [GUIA_GITHUB_PAGES.md](GUIA_GITHUB_PAGES.md).
+La versión 2.5.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
-Resumen:
+**Método recomendado para subir únicamente desde la web de GitHub:**
 
-1. Crea un repositorio vacío en GitHub.
-2. Sube todo el contenido de esta carpeta a la rama `main`.
-3. En **Settings → Pages**, selecciona **GitHub Actions** como origen.
-4. El flujo `Probar y publicar OmegaZero` ejecutará las pruebas, construirá `dist/` y publicará el sitio.
+1. Sube todo el contenido de esta carpeta a `main`.
+2. En **Settings → Pages**, selecciona **Deploy from a branch**.
+3. Selecciona `main` y `/(root)`.
+4. Guarda. No se necesita compilar ni subir `dist/`.
+
+**Método con GitHub Actions:** selecciona **GitHub Actions** como origen. El flujo incluido prueba, construye y publica `dist/`.
+
+Consulta [GUIA_GITHUB_PAGES.md](GUIA_GITHUB_PAGES.md).
 
 ## Desarrollo local
 

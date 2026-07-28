@@ -11,7 +11,10 @@ const assetRoot = resolve(dist, 'assets', buildId);
 await rm(dist, { recursive: true, force: true });
 await mkdir(assetRoot, { recursive: true });
 await cp(resolve(root, 'src'), assetRoot, { recursive: true });
-await cp(resolve(root, 'public'), dist, { recursive: true });
+await mkdir(resolve(dist, 'public'), { recursive: true });
+await cp(resolve(root, 'public'), resolve(dist, 'public'), { recursive: true });
+// robots.txt también se copia a la raíz para que los crawlers lo encuentren.
+try { await cp(resolve(root, 'public', 'robots.txt'), resolve(dist, 'robots.txt')); } catch {}
 await cp(resolve(root, 'CHESS_JS_LICENSE.md'), resolve(dist, 'CHESS_JS_LICENSE.md'));
 await cp(resolve(root, 'CHESSBOARD_ELEMENT_LICENSE.md'), resolve(dist, 'CHESSBOARD_ELEMENT_LICENSE.md'));
 for (const doc of ['FIDE_RULES.md', 'DATA_SOURCES.md', 'README.md', 'GUIA_GITHUB_PAGES.md', 'MASTER_GAMES_LICENSE.txt', 'OPENINGS_CC0_LICENSE.txt', 'COPYING.txt']) {
