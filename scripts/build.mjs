@@ -27,6 +27,7 @@ html = html
   .replace(/\.\/src\/main\.js(?:\?[^\"']*)?/, `./assets/${buildId}/main.js`);
 await writeFile(resolve(dist, 'index.html'), html, 'utf8');
 await writeFile(resolve(dist, '404.html'), html, 'utf8');
+try { await cp(resolve(root, 'diagnostico-stockfish.html'), resolve(dist, 'diagnostico-stockfish.html')); } catch {}
 await writeFile(resolve(dist, '.nojekyll'), '', 'utf8');
 await writeFile(resolve(dist, 'version.json'), JSON.stringify({ version: pkg.version, buildId, builtAt: new Date().toISOString() }, null, 2), 'utf8');
 console.log(`OmegaZero ${pkg.version} construido en dist/ (${buildId})`);

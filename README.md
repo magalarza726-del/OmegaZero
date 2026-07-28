@@ -1,4 +1,4 @@
-# OmegaZero v2.5.1 — Aplicación web personal
+# OmegaZero v2.5.2 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -17,7 +17,7 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 
 ## Publicar en GitHub Pages
 
-La versión 2.5.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.5.2 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -64,3 +64,7 @@ Las partidas, problemas, preferencias e imágenes personalizadas se guardan en e
 ## Licencias y fuentes
 
 Consulta `COPYING.txt`, `DATA_SOURCES.md`, `OPENINGS_CC0_LICENSE.txt`, `MASTER_GAMES_LICENSE.txt`, `CHESS_JS_LICENSE.md` y `CHESSBOARD_ELEMENT_LICENSE.md`.
+
+## Diagnóstico del motor
+
+Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stockfish.html` dentro de la misma dirección pública. La página comprueba el archivo JavaScript, el WASM, su tipo MIME y la respuesta `uciok`.
