@@ -9,7 +9,7 @@ const build=fs.readFileSync(new URL('../scripts/build.mjs',import.meta.url),'utf
 const server=fs.readFileSync(new URL('../SERVIDOR.py',import.meta.url),'utf8');
 
 test('v2 usa un esquema de datos separado y versionado',()=>{
-  assert.equal(APP_VERSION,'2.5.1');
+  assert.equal(APP_VERSION,'2.6.0');
   assert.equal(STORAGE_NAMESPACE,'omegazero:v2');
   assert.match(storage,/STORAGE_NAMESPACE/);
   assert.match(storage,/IndexedDB/);

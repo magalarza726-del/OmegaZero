@@ -10,7 +10,7 @@ const main=readFileSync(resolve(root,'src/main.js'),'utf8');
 const utils=readFileSync(resolve(root,'src/core/utils.js'),'utf8');
 
 test('la distribución es exclusivamente web y no contiene Capacitor',()=>{
-  assert.equal(pkg.version,'2.5.1');
+  assert.equal(pkg.version,'2.6.0');
   assert.equal(pkg.name,'omegazero-chess-web');
   assert.equal(pkg.dependencies,undefined);
   assert.doesNotMatch(main,/setupNativePlatform|Capacitor/);

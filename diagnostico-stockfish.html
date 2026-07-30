@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Diagnóstico Stockfish · OmegaZero</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#07111f;color:#eef6ff;max-width:900px;margin:0 auto;padding:28px;line-height:1.5}
+    h1{color:#58b7ff}.card{background:#0b1c2d;border:1px solid #28445f;border-radius:14px;padding:18px;margin:14px 0}
+    .ok{color:#62d88f}.bad{color:#ff7777}.muted{color:#a9bfd2}code{word-break:break-all}button{padding:10px 16px;border-radius:8px;border:0;background:#53ace8;font-weight:700;cursor:pointer}
+    pre{white-space:pre-wrap;background:#06101b;padding:14px;border-radius:10px;min-height:120px}
+  </style>
+</head>
+<body>
+  <h1>Diagnóstico de Stockfish</h1>
+  <p class="muted">Esta página comprueba las rutas públicas, el tipo MIME del archivo WASM y la respuesta UCI del motor.</p>
+  <button id="start">Ejecutar diagnóstico</button>
+  <div class="card"><strong>Script:</strong> <code id="jsUrl"></code><div id="jsResult"></div></div>
+  <div class="card"><strong>WASM:</strong> <code id="wasmUrl"></code><div id="wasmResult"></div></div>
+  <div class="card"><strong>Worker:</strong><pre id="log"></pre></div>
+  <script type="module">
+    const base = document.baseURI;
+    const jsUrl = new URL('./public/engine/stockfish-18-lite-single.js?v=2.6.0', base).href;
+    const wasmUrl = new URL('./public/engine/stockfish-18-lite-single.wasm?v=2.6.0', base).href;
+    const $ = (id) => document.getElementById(id);
+    $('jsUrl').textContent = jsUrl;
+    $('wasmUrl').textContent = wasmUrl;
+    const result = (id, ok, text) => { $(id).className = ok ? 'ok' : 'bad'; $(id).textContent = text; };
+    const log = (text) => { $('log').textContent += `${text}\n`; };
+
+    async function inspect(url, id) {
+      try {
+        const response = await fetch(url, { cache:'no-store' });
+        const type = response.headers.get('content-type') || 'sin Content-Type';
+        result(id, response.ok, `HTTP ${response.status} · ${type} · ${Number(response.headers.get('content-length') || 0).toLocaleString()} bytes declarados`);
+        return response.ok;
+      } catch (error) {
+        result(id, false, error.message);
+        return false;
+      }
+    }
+
+    $('start').onclick = async () => {
+      $('log').textContent = '';
+      const [jsOk, wasmOk] = await Promise.all([inspect(jsUrl,'jsResult'), inspect(wasmUrl,'wasmResult')]);
+      if (!jsOk || !wasmOk) { log('No se inicia el Worker porque falta uno de los recursos.'); return; }
+      const workerUrl = `${jsUrl}#${encodeURIComponent(wasmUrl)}`;
+      log(`Worker: ${workerUrl}`);
+      const worker = new Worker(workerUrl);
+      const timeout = setTimeout(() => { log('ERROR: no llegó uciok después de 90 segundos.'); worker.terminate(); }, 90000);
+      worker.onerror = (event) => log(`ERROR Worker: ${event.message || 'sin detalle'} · línea ${event.lineno || '?'}`);
+      worker.onmessage = (event) => {
+        const line = String(event.data);
+        log(line);
+        if (line.includes('uciok')) {
+          clearTimeout(timeout);
+          log('OK: Stockfish respondió correctamente.');
+          worker.postMessage('quit');
+        }
+      };
+      worker.postMessage('uci');
+    };
+  </script>
+</body>
+</html>
