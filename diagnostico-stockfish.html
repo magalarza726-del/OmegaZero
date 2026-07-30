@@ -20,8 +20,8 @@
   <div class="card"><strong>Worker:</strong><pre id="log"></pre></div>
   <script type="module">
     const base = document.baseURI;
-    const jsUrl = new URL('./public/engine/stockfish-18-lite-single.js?v=2.6.0', base).href;
-    const wasmUrl = new URL('./public/engine/stockfish-18-lite-single.wasm?v=2.6.0', base).href;
+    const jsUrl = new URL('./public/engine/stockfish-18-lite-single.js?v=2.7.1', base).href;
+    const wasmUrl = new URL('./public/engine/stockfish-18-lite-single.wasm?v=2.7.1', base).href;
     const $ = (id) => document.getElementById(id);
     $('jsUrl').textContent = jsUrl;
     $('wasmUrl').textContent = wasmUrl;

@@ -1,4 +1,4 @@
-# OmegaZero v2.6.0 — Aplicación web personal
+# OmegaZero v2.7.1 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -16,6 +16,31 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 - Persistencia local mediante IndexedDB.
 - Laboratorio **Transformada de Stockfish** con matriz posición-control, propiedades algebraicas, funciones escalares/matriciales y gráfica por semijugada.
 
+
+## T-COM vs T-COM
+
+OmegaZero 2.7.1 añade un laboratorio separado del COM vs COM tradicional para enfrentar **motores simbólicos de una sola semijugada**. Cada módulo:
+
+1. genera todas las jugadas legales del turno;
+2. construye la matriz de cada posición hija;
+3. aplica funciones escalares `f(a)`, matriciales `F(A)` o mixtas;
+4. reduce la salida a un valor mediante norma, traza, determinante, pseudodeterminante, radio espectral o condición;
+5. elige la mejor semijugada sin calcular respuestas ni variantes.
+
+Ejemplos válidos:
+
+```text
+X(a)=exp(a)
+X(A)=exp(A)
+X(A,a)=sin(A)+cos(a)
+```
+
+El laboratorio permite torneos de 1 a 1000 partidas, alternancia de colores, aperturas aleatorias, diversidad entre valores cercanos, comparación contra Stockfish, exportación PGN/CSV y guardado opcional en la biblioteca. Para evitar congelamientos en series largas utiliza procesamiento por bloques y una caché limitada de evaluaciones.
+
+## Optimización de la Transformada de Stockfish
+
+La gráfica por semijugadas ahora usa análisis por límite de nodos, cachés de series, evaluación perezosa de funciones personalizadas, renderizado con `requestAnimationFrame`, cálculo exclusivo del rango visible y reducción adaptativa de puntos. Estas medidas evitan recalcular toda la partida durante cada desplazamiento o zoom y conservan resultados parciales si el análisis se interrumpe.
+
 ## Transformada de Stockfish
 
 El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera. La pantalla de resumen reúne hojas e importaciones, tablero, semijugadas y parámetros algebraicos; **Ver gráfica** abre la calculadora matemática y el graficador desplazable.
@@ -27,7 +52,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.6.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.7.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
