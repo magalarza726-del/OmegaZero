@@ -1,4 +1,4 @@
-# OmegaZero v2.7.3 — Aplicación web personal
+# OmegaZero v2.7.4 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -29,7 +29,7 @@ Cada expresión crea una pestaña gráfica independiente. Dentro de esa pestaña
 
 ## T-COM vs T-COM
 
-OmegaZero 2.7.3 añade un laboratorio separado del COM vs COM tradicional para enfrentar **motores simbólicos de una sola semijugada**. Cada módulo:
+OmegaZero 2.7.4 añade un laboratorio separado del COM vs COM tradicional para enfrentar **motores simbólicos de una sola semijugada**. Cada módulo:
 
 1. genera todas las jugadas legales del turno;
 2. construye la matriz de cada posición hija;
@@ -64,7 +64,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.7.3 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.7.4 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
