@@ -1,4 +1,4 @@
-# OmegaZero v2.7.1 — Aplicación web personal
+# OmegaZero v2.7.3 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -17,9 +17,19 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 - Laboratorio **Transformada de Stockfish** con matriz posición-control, propiedades algebraicas, funciones escalares/matriciales y gráfica por semijugada.
 
 
+
+## Gráficas por función y selector a/A
+
+La calculadora del laboratorio muestra dos selectores explícitos:
+
+- **a**: aplica la operación a cada valor de la matriz, entrada por entrada.
+- **A**: aplica la operación a la matriz completa.
+
+Cada expresión crea una pestaña gráfica independiente. Dentro de esa pestaña se siguen por semijugada la salida de la función, la valoración de Stockfish y las propiedades algebraicas de la matriz transformada: determinante, rango, traza, norma de Frobenius, condición efectiva, pseudodeterminante singular, radio espectral aproximado y menor valor singular positivo. Los cálculos se realizan por lotes para mantener la interfaz receptiva.
+
 ## T-COM vs T-COM
 
-OmegaZero 2.7.1 añade un laboratorio separado del COM vs COM tradicional para enfrentar **motores simbólicos de una sola semijugada**. Cada módulo:
+OmegaZero 2.7.3 añade un laboratorio separado del COM vs COM tradicional para enfrentar **motores simbólicos de una sola semijugada**. Cada módulo:
 
 1. genera todas las jugadas legales del turno;
 2. construye la matriz de cada posición hija;
@@ -37,6 +47,8 @@ X(A,a)=sin(A)+cos(a)
 
 El laboratorio permite torneos de 1 a 1000 partidas, alternancia de colores, aperturas aleatorias, diversidad entre valores cercanos, comparación contra Stockfish, exportación PGN/CSV y guardado opcional en la biblioteca. Para evitar congelamientos en series largas utiliza procesamiento por bloques y una caché limitada de evaluaciones.
 
+También incluye una **partida individual jugable** dentro del mismo laboratorio. Puedes controlar blancas, negras o ambos bandos mediante clic o arrastre. Cuando controlas un solo color, el módulo T-COM o Stockfish configurado para el rival puede responder automáticamente; también se puede deshacer el último turno o solicitar manualmente la semijugada del módulo.
+
 ## Optimización de la Transformada de Stockfish
 
 La gráfica por semijugadas ahora usa análisis por límite de nodos, cachés de series, evaluación perezosa de funciones personalizadas, renderizado con `requestAnimationFrame`, cálculo exclusivo del rango visible y reducción adaptativa de puntos. Estas medidas evitan recalcular toda la partida durante cada desplazamiento o zoom y conservan resultados parciales si el análisis se interrumpe.
@@ -52,7 +64,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.7.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.7.3 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
