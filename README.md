@@ -1,4 +1,4 @@
-# OmegaZero v2.7.5 — Aplicación web personal
+# OmegaZero v2.8.0 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -15,7 +15,22 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 - Personalización de tableros, piezas, anotaciones y sonidos.
 - Persistencia local mediante IndexedDB.
 - Laboratorio **Transformada de Stockfish** con matriz posición-control, propiedades algebraicas, funciones escalares/matriciales y gráfica por semijugada.
+- **Alfabeto estructural de peones**: galería interactiva de las 256 configuraciones `0000`–`3333`, con mapa cromático objetivo y detalle geométrico por estructura.
 
+
+
+## Alfabeto estructural de peones
+
+Desde Inicio, la tarjeta **Alfabeto estructural** abre una galería generada algorítmicamente con las 256 configuraciones teóricas de cuatro peones contiguos. Cada dígito del código indica un avance de 0 a 3 casillas desde la posición inicial.
+
+La visualización usa una orientación canónica con avance hacia arriba:
+
+- azul claro: casillas situadas detrás del peón de ese archivo;
+- verde: casillas atacadas por un peón y, por tanto, posibles casillas de captura o apoyo;
+- naranja: casillas situadas delante del peón que no están controladas por el propio bloque;
+- `2`: casilla sometida a doble control de peones.
+
+Los márgenes laterales tenues permiten ver ataques que salen de los cuatro archivos estudiados. Al abrir una estructura se muestran, sin asignar valoración buena/mala, el avance acumulado, profundidad geométrica, gradiente, control, doble control, peones apoyados, retaguardia y frente no controlado.
 
 
 ## Gráficas por función y selector a/A
@@ -29,7 +44,7 @@ Cada expresión crea una pestaña gráfica independiente. Dentro de esa pestaña
 
 ## T-COM vs T-COM
 
-OmegaZero 2.7.5 añade un laboratorio separado del COM vs COM tradicional para enfrentar **motores simbólicos de una sola semijugada**. Cada módulo:
+OmegaZero 2.8.0 añade un laboratorio separado del COM vs COM tradicional para enfrentar **motores simbólicos de una sola semijugada**. Cada módulo:
 
 1. genera todas las jugadas legales del turno;
 2. construye la matriz de cada posición hija;
@@ -64,7 +79,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.7.5 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.8.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
