@@ -1,4 +1,4 @@
-# Publicar OmegaZero v2.8.5 en GitHub Pages
+# Publicar OmegaZero v2.8.6 en GitHub Pages
 
 Esta edición usa rutas relativas a `public/` y funciona incluso cuando GitHub Pages publica el proyecto bajo una dirección como:
 
@@ -33,7 +33,7 @@ Al abrir la página deben cumplirse estas tres señales:
 
 - El logo aparece en la cabecera y en la portada.
 - La esquina superior derecha cambia a **Motor listo · Stockfish 18**.
-- La cabecera muestra **v2.8.5**.
+- La cabecera muestra **v2.8.6**.
 
 Las rutas esperadas, sustituyendo tu usuario y repositorio, son:
 
@@ -55,5 +55,5 @@ Si alguna devuelve 404, vuelve a subir la carpeta `public` completa.
 Partidas, estadísticas y preferencias viven en IndexedDB dentro de cada navegador y dirección web. Reemplazar archivos del repositorio no las borra. Cambiar el nombre del repositorio sí crea un origen diferente; antes de hacerlo exporta un respaldo desde Configuración.
 
 
-### Galería estructural v2.8.5
-La galería incluye prioridad verde sobre morado y anotaciones tipo Lichess en la vista ampliada de cada microestructura.
+### Galería estructural v2.8.6
+La galería conserva el filtro aunque el campo pierda el foco, permite activar o desactivar la capa morada de columnas abiertas y mantiene prioridad verde sobre morado. Las anotaciones tipo Lichess siguen disponibles en la vista ampliada.

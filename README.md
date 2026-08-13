@@ -1,4 +1,4 @@
-# OmegaZero v2.8.5 — Aplicación web personal
+# OmegaZero v2.8.6 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -79,7 +79,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.8.5 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.8.6 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -141,12 +141,10 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - No se modificó la lógica de navegación ni el funcionamiento de los demás botones.
 
 
-## Cambios v2.8.5
+## Cambios v2.8.6
 
-- Corrige definitivamente la prioridad cromática del Alfabeto Estructural: `azul/naranja < morado < verde`; una casilla controlada permanece verde aunque pertenezca a una columna abierta.
-- Mantiene la sincronización del tablero 6×6 con el color seleccionado en Configuración.
-- La ficha ampliada conserva únicamente cuatro indicadores: espacio azul, control verde, frente naranja y gradiente, con su explicación formal.
-- Añade anotaciones tipo Lichess solo dentro de la galería: círculo con clic derecho, flecha con arrastre derecho; en pantalla táctil, toque y arrastre.
-- Reutiliza los mismos cuatro colores de anotación ya existentes (rojo, amarillo, verde y azul) y añade un botón para limpiar las anotaciones.
-- Las anotaciones se conservan al pasar a la tarjeta anterior o siguiente durante la sesión.
-- No se modifica el funcionamiento de los tableros, botones ni anotaciones de los demás módulos.
+- El filtro de la Galería Estructural conserva su consulta al perder el foco, abrir/cerrar tarjetas y ante rerenders de la vista.
+- Se añade la casilla **Pintar columnas abiertas (morado)**; desactivarla oculta solo esa capa visual y no modifica el estado `9` ni las métricas.
+- La preferencia de mostrar morado se guarda en la configuración local.
+- Se refuerza explícitamente la prioridad visual del verde sobre el morado cuando ambas capas coinciden.
+- Se conservan las 625 microestructuras, la navegación, las anotaciones tipo Lichess y el resto de módulos sin cambios funcionales.

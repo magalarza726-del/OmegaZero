@@ -1,0 +1,1214 @@
+import { Chess } from './vendor/chess.js';
+import { StockfishEngine } from './engine.js';
+import { chooseBotCandidate } from './scheme.js';
+import { resolveBotScheme } from './bots.js';
+import { OPENINGS, openingOptions, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan } from './openings.js';
+import { MASTER_GAMES, MASTER_PROBLEMS } from './data/masterGames.js';
+import { loadDb, hydrateDb, saveDb, flushDb, addGame, addProblemsFromGame, getMigrationInfo, migrateLegacyData, declineLegacyMigration, clearGamesAndTraining, resetAllAppData } from './storage.js';
+import { APP_VERSION } from './version.js';
+import { $, $$, clamp, escapeHtml as esc, uciToMove, scoreText, phaseFromFen, downloadText } from './core/utils.js';
+import { classifyMoveQuality, validCandidates } from './core/moveQuality.js';
+import { fideGameState, timeoutResult, FIDE_RULES_VERSION } from './core/fideRules.js';
+import { buildGameStats, buildTrainingStats, buildPlayerEloStats, estimateWdl } from './core/statistics.js';
+import { applyAccessibility, boardSquareAria, announce } from './ui/accessibility.js';
+import { playTone } from './ui/sounds.js';
+import { publicAsset } from './publicAssets.js';
+import { buildPositionMatrix, algebraicProperties, buildTimelineFromPgn, splitPgnDatabase, pgnDisplayName, compileFunctionDefinitions, evaluateCompiledFunctionDefinitions, compileScalarFunctionLine, formatNumber } from './core/algebraicChess.js';
+import { chooseTransformMoveOnePly } from './core/tcom.js';
+import { finiteExtentOfSeries, normalizeFiniteSeries } from './core/seriesMath.js';
+import { lruGet, lruSet } from './core/lruCache.js';
+import { PAWN_STRUCTURE_CODES, analyzePawnStructure } from './core/pawnStructures.js';
+
+const PIECE={wp:'wP',wn:'wN',wb:'wB',wr:'wR',wq:'wQ',wk:'wK',bp:'bP',bn:'bN',bb:'bB',br:'bR',bq:'bQ',bk:'bK'};
+const THEMES={blue:{name:'Azul',light:'#dceefa',dark:'#5f9fc8',accent:'#4ea9e8'},green:{name:'Verde',light:'#e1efd8',dark:'#709b5d',accent:'#7cac64'},red:{name:'Rojo',light:'#f3dfdc',dark:'#b95f57',accent:'#dd665d'},yellow:{name:'Amarillo',light:'#fff2bf',dark:'#c9a63d',accent:'#f2c94c'},purple:{name:'Morado',light:'#eee3fb',dark:'#8061aa',accent:'#ad7ee5'}};
+const START_FEN='start';
+
+class App{
+ constructor(root){
+  this.root=root;this.db=loadDb();this.dbReady=false;this.migrationInfo=getMigrationInfo();this.migrationOpen=this.migrationInfo.available&&!this.migrationInfo.decided;this.screen='home';this.chess=new Chess();this.engine=new StockfishEngine(s=>{this.engineStatus=s;this.paintStatus()});this.engineStatus='Iniciando motor';
+  const savedGameConfig=this.db.settings.gameConfig||{};
+  this.cfg={mode:'pvc',white:'human',black:'zero',humanColor:'w',style:'zero',depth:14,multiPv:3,skill:20,opening:'auto',whiteOpening:'auto',blackOpening:'auto',independentOpenings:false,autoPlay:true,clock:false,minutes:10,increment:0,repeat:1,simultaneous:1,separateBoardColors:false,independentSimClocks:true,opponents:[],setupMode:this.db.settings.setupMode||'quick',alternateColors:true,diversity:25,...savedGameConfig,opponents:Array.isArray(savedGameConfig.opponents)?savedGameConfig.opponents:[]};
+  this.selected=null;this.legal=[];this.lastMove=null;this.positions=[];this.gameSaved=false;this.thinking=false;this.clock={w:600,b:600,last:0,timer:null};this.analysis=null;this.analysisBusy=false;this.analysisTimer=null;this.lastMoveQuality=null;this.strategySource=null;this.strategy={length:this.db.settings.strategyLength||1,index:0,step:0,score:0,problem:null,candidates:[],sessionSize:this.db.settings.strategySessionSize||10,sessionIndex:0,difficulty:this.db.settings.strategyDifficulty||'medium',phase:this.db.settings.strategyPhase||'all',opening:this.db.settings.strategyOpening||'all',sessionResults:[],review:null};this.annotations=new Map();this.arrows=[];this.drag=null;this.settingsOpen=false;this.paused=false;this.boardFlipped=false;this.annotation={open:false,color:'yellow'};this.rightAnnotation=null;this.gameAsideScroll=0;this.analysisReturn=null;this.analysisMoveQuality=null;this.series={current:1,total:1};this.lastStrategyProblemId=null;this.simultaneous=null;this.simEngineQueue=Promise.resolve();this.analysisTimeline=[];this.analysisIndex=0;this.analysisComments={};this.analysisEdit={enabled:false,piece:'wP'};this.libraryFilter={query:'',result:'all',mode:'all',opening:'all'};this.pawnGalleryFilter='';this.pawnGalleryShowOpenFiles=this.db.settings.pawnGalleryShowOpenFiles!==false;this.selectedLibraryGames=new Set();this.transformLab=null;this.tcomLab=null;this.ensureOpponentConfigs();
+  applyAccessibility(this.db.settings);this.render();hydrateDb().then(db=>{this.db=db;this.dbReady=true;applyAccessibility(this.db.settings);if(this.screen==='home')this.render()});this.engine.init().catch((error)=>{this.engineStatus=`Motor no disponible · ${error?.message || 'error desconocido'}`;this.paintStatus()});
+ }
+ render(){
+  applyAccessibility(this.db.settings);
+  this.disposeTransformGraphBinding();
+  if(this.screen!=='stockfishTransform')this.disposeTransformLiveAnalysis();
+  this.root.innerHTML=this.shell();
+  this.bindGlobal();
+  try{
+   const renderer={home:'renderHome',setup:'renderSetup',game:'renderGame',analysis:'renderAnalysis',strategy:'renderStrategy',customize:'renderCustomize',library:'renderLibrary',stockfishTransform:'renderStockfishTransform',stockfishGraph:'renderStockfishGraph',tcomLab:'renderTComLab',pawnGallery:'renderPawnGallery'}[this.screen];
+   if(!renderer||typeof this[renderer]!=='function')throw new Error(`Vista desconocida: ${this.screen}`);
+   this[renderer]();
+  }catch(error){
+   console.error(`OmegaZero no pudo abrir la vista ${this.screen}`,error);
+   this.renderViewError(error);
+  }
+ }
+ shell(){const t=THEMES[this.db.settings.boardColor]||THEMES.blue;return `<main class="app" style="--light:${t.light};--dark:${t.dark};--accent:${t.accent}"><header class="top" role="banner"><button class="logo" data-home title="Inicio"><img src="${publicAsset('omegazero-mark.png', APP_VERSION)}" alt="OmegaZero"></button><div class="brand-copy"><div><b>OMEGAZERO</b><span class="version-badge">v${APP_VERSION}</span></div><small>Juega · analiza · genera entrenamiento</small></div><div class="status" id="engine-status">${esc(this.engineStatus)}</div><button class="transform-shortcut" data-transform-lab title="Transformada de Stockfish">ƒ(A)</button><button class="gear" data-settings>⚙</button></header><section id="view" tabindex="-1"></section>${this.settingsOpen?this.settingsHtml():''}${this.migrationOpen?this.migrationHtml():''}</main>`}
+ bindGlobal(){
+  $$('[data-home]').forEach(button=>button.onclick=()=>{this.stopClock();this.analysisReturn=null;this.screen='home';this.render()});
+  $('[data-transform-lab]')?.addEventListener('click',()=>{this.stopClock();this.screen='stockfishTransform';this.render()});
+  $('[data-settings]')?.addEventListener('click',()=>{this.settingsOpen=true;this.render()});
+  $('[data-close-settings]')?.addEventListener('click',()=>{this.settingsOpen=false;this.render()});
+  $$('[data-theme]').forEach(button=>button.onclick=()=>{this.db.settings.boardColor=button.dataset.theme;saveDb(this.db);this.render()});
+  $('[data-clear-training]')?.addEventListener('click',()=>this.clearTrainingData());
+  $('[data-reset-app]')?.addEventListener('click',()=>this.resetApplication());
+  $('[data-migrate-legacy]')?.addEventListener('click',()=>this.acceptMigration());
+  $('[data-clean-start]')?.addEventListener('click',()=>this.rejectMigration());
+  $('[data-open-migration]')?.addEventListener('click',()=>{this.settingsOpen=false;this.migrationOpen=true;this.render()});
+  $('[data-sound]')?.addEventListener('change',event=>this.updateSetting('sound',event.target.checked));
+  $('[data-sound-pack]')?.addEventListener('change',event=>this.updateSetting('soundPack',event.target.value));
+  $('[data-sound-volume]')?.addEventListener('input',event=>{const value=clamp(event.target.value,0,100);$('[data-sound-volume-output]').textContent=`${value}%`;this.updateSetting('soundVolume',value,false)});
+  $$('[data-preview-sound]').forEach(button=>button.addEventListener('click',()=>playTone(button.dataset.previewSound,{enabled:true,pack:this.db.settings.soundPack||'classic',volume:(this.db.settings.soundVolume??70)/100})));
+  $('[data-high-contrast]')?.addEventListener('change',event=>this.updateSetting('highContrast',event.target.checked));
+  $('[data-reduce-motion]')?.addEventListener('change',event=>this.updateSetting('reduceMotion',event.target.checked));
+  $('[data-color-vision]')?.addEventListener('change',event=>this.updateSetting('colorVision',event.target.value));
+  $('[data-font-scale]')?.addEventListener('input',event=>{const value=clamp(event.target.value,85,140);$('[data-font-output]').textContent=`${value}%`;this.updateSetting('fontScale',value,false)});
+  $('[data-export-backup]')?.addEventListener('click',()=>this.exportBackup());
+  $('[data-import-backup]')?.addEventListener('change',event=>this.importBackup(event.target.files?.[0]));
+ }
+ updateSetting(key,value,rerender=true){this.db.settings[key]=value;saveDb(this.db);applyAccessibility(this.db.settings);if(rerender)this.render()}
+ soundOptions(){return {enabled:Boolean(this.db.settings.sound),pack:this.db.settings.soundPack||'classic',volume:clamp(this.db.settings.soundVolume??70,0,100)/100}}
+ masterGameTitle(game){if(!game)return 'Partida magistral';const event=game.title||game.event||'Partida magistral',round=game.round&&game.round!=='?'?` · Ronda ${game.round}`:'';return `${event}${round}`}
+ exportBackup(){const payload={version:APP_VERSION,exportedAt:new Date().toISOString(),games:this.db.games,problems:this.db.problems,settings:this.db.settings,custom:this.db.custom,analysis:this.db.analysis||[]};downloadText(`OmegaZero-respaldo-${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(payload,null,2),'application/json')}
+ async importBackup(file){if(!file)return;try{const parsed=JSON.parse(await file.text());if(!Array.isArray(parsed.games)||!Array.isArray(parsed.problems))throw new Error('Formato incompatible');if(!confirm(`Importar ${parsed.games.length} partidas y ${parsed.problems.length} posiciones?`))return;this.db.games=parsed.games;this.db.problems=parsed.problems;this.db.settings={...this.db.settings,...(parsed.settings||{})};this.db.custom={...this.db.custom,...(parsed.custom||{})};this.db.analysis=Array.isArray(parsed.analysis)?parsed.analysis:[];await saveDb(this.db);this.settingsOpen=false;this.render();alert('Respaldo importado correctamente.')}catch(error){alert(`No se pudo importar: ${error.message}`)}}
+ settingsHtml(){
+  const training=buildTrainingStats(this.db.problems),games=buildGameStats(this.db.games),soundPack=this.db.settings.soundPack||'classic',soundVolume=this.db.settings.soundVolume??70;
+  const packs=[['chesscom','Chess.com · inspirado','Golpe definido y brillante'],['lichess','Lichess · inspirado','Respuesta suave y digital'],['wood','Madera','Piezas sobre tablero de madera'],['minimal','Minimalista','Tonos breves y discretos'],['arcade','Arcade','Sonido electrónico más expresivo']];
+  return `<div class="modal"><div class="dialog settings-dialog"><header><div><small>CONFIGURACIÓN · v${APP_VERSION}</small><h2>Preferencias, accesibilidad y datos</h2></div><button data-close-settings aria-label="Cerrar configuración">×</button></header>
+  <label>Color del tablero<div class="theme-grid">${Object.entries(THEMES).map(([id,theme])=>`<button data-theme="${id}" class="${this.db.settings.boardColor===id?'active':''}"><i style="--a:${theme.light};--b:${theme.dark}"></i>${theme.name}</button>`).join('')}</div></label>
+  <section class="settings-section sound-gallery"><header><div><h3>Galería de sonidos</h3><small>Presets originales sintetizados localmente; no contienen archivos oficiales de otras plataformas.</small></div><label class="toggle"><input data-sound type="checkbox" ${this.db.settings.sound?'checked':''}><span>Activar sonidos</span></label></header><div class="sound-pack-grid">${packs.map(([id,name,description])=>`<label class="sound-pack ${soundPack===id?'active':''}"><input data-sound-pack type="radio" name="soundPack" value="${id}" ${soundPack===id?'checked':''}><b>${name}</b><span>${description}</span></label>`).join('')}</div><label>Volumen <output data-sound-volume-output>${soundVolume}%</output><input data-sound-volume type="range" min="0" max="100" value="${soundVolume}"></label><div class="sound-preview-row"><button type="button" data-preview-sound="move">Probar movimiento</button><button type="button" data-preview-sound="capture">Probar captura</button><button type="button" data-preview-sound="check">Probar jaque</button><button type="button" data-preview-sound="end">Probar final</button></div></section>
+  <section class="settings-section"><h3>Accesibilidad</h3><div class="settings-grid"><label class="toggle"><input data-high-contrast type="checkbox" ${this.db.settings.highContrast?'checked':''}><span>Contraste alto</span></label><label class="toggle"><input data-reduce-motion type="checkbox" ${this.db.settings.reduceMotion?'checked':''}><span>Reducir movimiento</span></label><label>Visión del color<select data-color-vision>${['default','deuteranopia','protanopia','tritanopia'].map(value=>`<option value="${value}" ${this.db.settings.colorVision===value?'selected':''}>${({default:'Normal',deuteranopia:'Deuteranopia',protanopia:'Protanopia',tritanopia:'Tritanopia'})[value]}</option>`).join('')}</select></label><label class="span2">Tamaño de texto <output data-font-output>${this.db.settings.fontScale||100}%</output><input data-font-scale type="range" min="85" max="140" value="${this.db.settings.fontScale||100}"></label></div></section>
+  <section class="storage-summary"><h3>Base local en IndexedDB</h3><div><span><b>${games.total}</b> partidas</span><span><b>${training.total}</b> posiciones</span><span><b>${training.mastered}</b> dominadas</span></div><small>Partidas, entrenamiento e imágenes ya no dependen del pequeño límite de localStorage.</small></section>
+  <section class="storage-summary fide-summary"><h3>Reglamento FIDE</h3><p>${FIDE_RULES_VERSION}. OmegaZero aplica mate, ahogado, posición muerta, cinco repeticiones, reglas de 50/75 movimientos y resultado por tiempo según posibilidad real de mate.</p><small>Las reglas procedimentales de torneos presenciales se documentan en <code>FIDE_RULES.md</code>.</small></section>
+  ${this.migrationInfo.available&&this.migrationInfo.decision!=='migrated'?`<section class="storage-summary legacy-review"><h3>Datos anteriores disponibles</h3><p>Puedes importarlos de forma explícita; nunca se mezclan silenciosamente.</p><button data-open-migration>Revisar migración</button></section>`:''}
+  <section class="settings-section"><h3>Respaldo</h3><div class="row"><button data-export-backup>Exportar respaldo JSON</button><label class="file-button">Importar respaldo<input data-import-backup type="file" accept="application/json"></label></div></section>
+  <section class="danger-zone"><h3>Administrar datos</h3><button data-clear-training>Borrar partidas y entrenamiento</button><small>Conserva preferencias, favoritas, piezas y tableros.</small><button data-reset-app class="danger">Restablecer toda la aplicación</button><small>Elimina localStorage e IndexedDB de OmegaZero.</small></section></div></div>`
+ }
+ migrationHtml(){const m=this.migrationInfo;return `<div class="modal migration-modal"><div class="dialog"><header><div><small>MIGRACIÓN DE DATOS</small><h2>Encontramos información de una versión anterior</h2></div></header><p>OmegaZero v${APP_VERSION} usa claves nuevas y todavía no ha importado nada. Decide qué hacer antes de continuar.</p><div class="migration-summary"><span><b>${m.games}</b> partidas</span><span><b>${m.problems}</b> posiciones</span><span><b>${m.favorites}</b> aperturas favoritas</span><span><b>${m.customAssets}</b> recursos personalizados</span></div><div class="migration-actions"><button data-clean-start>Empezar limpio</button><button data-migrate-legacy class="primary">Migrar datos anteriores</button></div><small>La migración elimina duplicados por identificador o posición y nunca mezcla datos sin tu autorización.</small></div></div>`}
+ async acceptMigration(){const result=await migrateLegacyData();this.db=loadDb();this.migrationOpen=false;this.migrationInfo=getMigrationInfo();this.render();alert(result.migrated?`Migración completada: ${result.games} partidas y ${result.problems} posiciones disponibles.`:'No se encontraron datos compatibles para migrar.')}
+ rejectMigration(){declineLegacyMigration();this.migrationOpen=false;this.migrationInfo=getMigrationInfo();this.render()}
+ async clearTrainingData(){if(!confirm('¿Borrar todas las partidas guardadas y las posiciones de Estrategia? Las preferencias y personalizaciones se conservarán.'))return;this.stopClock();this.db=await clearGamesAndTraining();this.strategy={length:this.db.settings.strategyLength||1,index:0,step:0,score:0,problem:null,candidates:[],sessionSize:this.db.settings.strategySessionSize||10,sessionIndex:0,difficulty:this.db.settings.strategyDifficulty||'medium',phase:this.db.settings.strategyPhase||'all',opening:this.db.settings.strategyOpening||'all',sessionResults:[]};this.settingsOpen=false;this.screen='home';this.render()}
+ async resetApplication(){if(!confirm('Esto eliminará partidas, entrenamiento, favoritos, configuraciones, texturas y piezas importadas de OmegaZero. ¿Continuar?'))return;if(!confirm('Confirmación final: esta acción no se puede deshacer.'))return;this.stopClock();await resetAllAppData();location.reload()}
+ eloForSkill(skill){
+  const levels=[650,750,850,950,1050,1150,1250,1350,1450,1550,1650,1750,1850,2000,2150,2300,2500,2700,2950,3200];
+  return levels[clamp(skill,1,20)-1];
+ }
+ renderViewError(error){
+  const v=$('#view');
+  if(!v)return;
+  const message=error instanceof Error?error.message:String(error||'Error desconocido');
+  v.innerHTML=`<section class="view-error panel"><small>RECUPERACIÓN DE VISTA · v${APP_VERSION}</small><h1>No se pudo abrir esta sección</h1><p>OmegaZero evitó dejar la aplicación en una pantalla vacía.</p><code>${esc(message)}</code><div class="actions"><button data-retry-view>Reintentar</button><button data-error-home class="primary">VOLVER AL INICIO</button></div></section>`;
+  $('[data-retry-view]')?.addEventListener('click',()=>this.render());
+  $('[data-error-home]')?.addEventListener('click',()=>{this.stopClock();this.analysisReturn=null;this.screen='home';this.render()});
+ }
+ renderHome(){
+  const gameStats=buildGameStats(this.db.games),trainingStats=buildTrainingStats(this.db.problems),eloStats=buildPlayerEloStats(this.db.games),v=$('#view');
+  const value=value=>value==null?'—':Math.round(value).toLocaleString('es-EC');
+  const excluded=eloStats.excluded?`<small class="elo-excluded">${eloStats.excluded} partida${eloStats.excluded===1?'':'s'} excluida${eloStats.excluded===1?'':'s'} por estar inconclusa${eloStats.excluded===1?'':'s'} o no guardar el nivel del motor.</small>`:'';
+  v.innerHTML=`<section class="hero"><div><small>OMEGAZERO v2 · ALFA TÉCNICA</small><h1>Tu ajedrez se convierte<br>en tu entrenamiento.</h1><p>Cada partida alimenta una biblioteca personal en IndexedDB. Zero defiende y contraataca; Omega busca iniciativa y complicaciones.</p><div class="hero-metrics"><span><b>${gameStats.total}</b> partidas</span><span><b>${trainingStats.total}</b> posiciones</span><span><b>${(trainingStats.average*100).toFixed(0)}%</b> rendimiento</span></div></div><div class="hero-logo"><img src="${publicAsset('omegazero-logo.png', APP_VERSION)}" alt="Logo OmegaZero"></div></section>
+  <section class="player-elo panel" aria-labelledby="player-elo-title"><header><div><small>ESTIMADOR PERSONAL · J1 VS COM</small><h2 id="player-elo-title">Elo probabilístico estimado</h2></div><span class="elo-reliability">${eloStats.reliability} · ${eloStats.count} partida${eloStats.count===1?'':'s'} válida${eloStats.count===1?'':'s'}</span></header><div class="elo-stat-grid"><article><b>Media</b><strong>${value(eloStats.mean)}</strong><p>${esc(eloStats.interpretations.mean)}</p></article><article><b>Mediana</b><strong>${value(eloStats.median)}</strong><p>${esc(eloStats.interpretations.median)}</p></article><article><b>Desviación estándar</b><strong>${value(eloStats.standardDeviation)}</strong><p>${esc(eloStats.interpretations.standardDeviation)}</p></article></div>${excluded}<footer>Estimación orientativa, no Elo oficial. El modelo compara todos tus resultados con la expectativa de Elo: no existe una suma o resta fija por partida. Perder contra un rival muy superior apenas cambia la estimación; vencerlo aporta mucha más evidencia.</footer></section>
+  <section class="home-grid"><button data-go="setup" data-mode="pvp"><b>JUGAR</b><span>J1 vs J2</span></button><button data-go="setup" data-mode="pvc"><b>JUGAR</b><span>J1 vs COM</span></button><button data-go="setup" data-mode="cvc"><b>LABORATORIO</b><span>COM vs COM</span></button><button data-go="analysis"><b>ENTRENAR</b><span>Tablero de análisis</span></button><button data-go="strategy"><b>ENTRENAR</b><span>Estrategia</span><em>${this.db.problems.length} propias · ${MASTER_PROBLEMS.length} magistrales</em></button><button data-go="customize"><b>PERSONALIZAR</b><span>Tablero y piezas</span></button><button data-go="stockfishTransform" class="transform-home-card"><b>LABORATORIO ALGEBRAICO</b><span>Transformada de Stockfish</span><em>Matrices · funciones · gráfica por semijugada</em></button><button data-go="tcomLab" class="transform-home-card tcom-home-card"><b>LABORATORIO EXPERIMENTAL</b><span>T-COM vs T-COM</span><em>Módulos algebraicos · una semijugada · sin variantes</em></button><button data-go="pawnGallery" class="wide pawn-gallery-home-card"><b>ALFABETO ESTRUCTURAL</b><span>Galería de 625 microestructuras de peones</span><em>0–3: avance · 9: peón ausente · 625 combinaciones</em></button><button data-go="library" class="wide"><b>BIBLIOTECA Y ESTADÍSTICAS</b><span>${this.db.games.length} partidas · ${OPENINGS.length} aperturas y variantes · ${this.db.settings.favoriteOpenings?.length||0} favoritas</span></button></section>`;
+  $$('[data-go]').forEach(button=>button.onclick=()=>{this.screen=button.dataset.go;if(this.screen==='analysis')this.analysisReturn=null;if(this.screen==='strategy')this.strategySource=null;if(button.dataset.mode)this.cfg.mode=button.dataset.mode;this.render()});
+ }
+ pawnStructureAnnotationState(code){
+  if(!this.pawnGalleryAnnotations)this.pawnGalleryAnnotations=new Map();
+  if(!this.pawnGalleryAnnotations.has(code))this.pawnGalleryAnnotations.set(code,{circles:new Map(),arrows:[]});
+  return this.pawnGalleryAnnotations.get(code);
+ }
+ pawnStructureAnnotationSvg(state){
+  if(!state?.arrows?.length)return'';
+  const xy=point=>{const [file,rank]=String(point).split(':').map(Number);return[file*100+50,(6-rank)*100+50]};
+  return `<svg class="pawn-structure-arrows" viewBox="0 0 600 600" aria-hidden="true">${state.arrows.map(a=>{const [x1,y1]=xy(a.from),[x2,y2]=xy(a.to),c=a.color||'yellow',dx=x2-x1,dy=y2-y1,len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len,uy=dy/len,baseX=x2-34*ux,baseY=y2-34*uy,px=-uy,py=ux,leftX=baseX+20*px,leftY=baseY+20*py,rightX=baseX-20*px,rightY=baseY-20*py,shaftX=baseX-3*ux,shaftY=baseY-3*uy;return `<line class="stroke-${c}" x1="${x1}" y1="${y1}" x2="${shaftX}" y2="${shaftY}"/><polygon class="fill-${c}" points="${x2},${y2} ${leftX},${leftY} ${rightX},${rightY}"/>`}).join('')}</svg>`
+ }
+ pawnStructureBoardHtml(analysis,large=false,annotationState=null){
+  const byRank=[...analysis.cells].sort((a,b)=>b.rank-a.rank||a.file-b.file);
+  const pawnAsset=publicAsset('pieces/alpha/wP.png',APP_VERSION);
+  return `<div class="pawn-structure-board ${large?'large':''} ${annotationState?'annotatable':''}" role="img" aria-label="Estructura ${analysis.code}, estados ${analysis.heights.join(', ')}. Tablero de seis por seis con núcleo de cuatro por cuatro centrado.">${byRank.map(cell=>{
+   const classes=['pawn-structure-cell',((cell.file+cell.rank)%2?'light':'dark')];
+   if(cell.isCore)classes.push('core');
+   else classes.push('outer');
+   if(cell.isCore&&cell.file===1)classes.push('core-left');
+   if(cell.isCore&&cell.file===4)classes.push('core-right');
+   if(cell.isCore&&cell.rank===5)classes.push('core-top');
+   if(cell.isCore&&cell.rank===2)classes.push('core-bottom');
+   // Prioridad semántica final: azul/naranja < morado < verde.
+   // Si una columna abierta también está controlada, el verde debe quedar visible.
+   if(cell.behind)classes.push('behind');
+   if(cell.aheadUncontrolled)classes.push('ahead-uncontrolled');
+   if(cell.openFile)classes.push('open-file');
+   if(cell.controlCount>0)classes.push('controlled');
+   if(cell.controlCount>1)classes.push('double-controlled');
+   if(cell.pawn)classes.push('occupied');
+   const square=`${cell.file}:${cell.rank}`,circle=annotationState?.circles?.get(square);
+   return `<span class="${classes.join(' ')}" data-rank="${cell.rank}" data-file="${cell.file}" data-pawn-square="${square}">${cell.pawn?`<img class="pawn-structure-piece" src="${pawnAsset}" alt="" draggable="false">`:''}${cell.controlCount>1?'<b aria-label="doble control">2×</b>':''}${circle?`<i class="pawn-ann-circle ann-${circle}" aria-hidden="true"></i>`:''}</span>`;
+  }).join('')}${annotationState?this.pawnStructureAnnotationSvg(annotationState):''}</div>`
+ }
+ pawnStructureAnnotationToolbar(){
+  const color=this.pawnGalleryAnnotationColor||this.annotation?.color||'yellow';
+  return `<div class="pawn-annotation-toolbar"><div><b>✎ Anotaciones</b><div class="color-row">${['red','yellow','green','blue'].map(c=>`<button type="button" data-pawn-ann-color="${c}" class="swatch ${c} ${color===c?'active':''}" aria-label="Color ${c}"></button>`).join('')}</div><button type="button" data-pawn-ann-clear>Limpiar</button></div><small><b>PC:</b> clic derecho = círculo · arrastre derecho = flecha. <b>Táctil:</b> toque = círculo · arrastre = flecha.</small></div>`
+ }
+ bindPawnStructureAnnotationBoard(modal,code,rerender){
+  const board=$('.pawn-structure-board.large',modal);if(!board)return;
+  const state=this.pawnStructureAnnotationState(code);
+  board.oncontextmenu=e=>e.preventDefault();
+  const begin=(e,square)=>{
+   if(!(e.button===2||e.pointerType==='touch'))return;
+   e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);
+   this.pawnGalleryRightAnnotation={id:e.pointerId,from:square,x:e.clientX,y:e.clientY,moved:false,code};
+  };
+  const move=e=>{const d=this.pawnGalleryRightAnnotation;if(!d||e.pointerId!==d.id||d.code!==code)return;if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>7)d.moved=true};
+  const end=e=>{
+   const d=this.pawnGalleryRightAnnotation;if(!d||e.pointerId!==d.id||d.code!==code)return;
+   this.pawnGalleryRightAnnotation=null;e.preventDefault();e.stopPropagation();
+   const target=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('[data-pawn-square]');
+   const to=target&&board.contains(target)?target.dataset.pawnSquare:d.from;
+   const color=this.pawnGalleryAnnotationColor||this.annotation?.color||'yellow';
+   if(d.moved&&to&&to!==d.from){
+    const ix=state.arrows.findIndex(a=>a.from===d.from&&a.to===to);
+    if(ix>=0&&state.arrows[ix].color===color)state.arrows.splice(ix,1);
+    else{if(ix>=0)state.arrows.splice(ix,1);state.arrows.push({from:d.from,to,color})}
+   }else{
+    state.circles.get(d.from)===color?state.circles.delete(d.from):state.circles.set(d.from,color);
+   }
+   rerender(code);
+  };
+  $$('[data-pawn-square]',board).forEach(cell=>{
+   cell.onpointerdown=e=>begin(e,cell.dataset.pawnSquare);
+   cell.onpointermove=move;
+   cell.onpointerup=end;
+   cell.onpointercancel=e=>{if(this.pawnGalleryRightAnnotation?.id===e.pointerId)this.pawnGalleryRightAnnotation=null};
+  });
+  $$('[data-pawn-ann-color]',modal).forEach(button=>button.onclick=()=>{this.pawnGalleryAnnotationColor=button.dataset.pawnAnnColor;rerender(code)});
+  $('[data-pawn-ann-clear]',modal)?.addEventListener('click',()=>{state.circles.clear();state.arrows.length=0;rerender(code)});
+ }
+ pawnStructureCardHtml(code){
+  const analysis=analyzePawnStructure(code);
+  return `<button type="button" class="pawn-structure-card" data-pawn-structure="${code}" data-code="${code}" aria-label="Abrir estructura ${code}"><header><strong>${code}</strong><small>[${analysis.heights.join(' · ')}]</small></header>${this.pawnStructureBoardHtml(analysis)}<footer><span title="Avance acumulado">Σ ${analysis.totalAdvance}</span><span title="Casillas controladas">◆ ${analysis.controlledUniqueCount}</span><span title="Frente no controlado">▵ ${analysis.aheadUncontrolledCount}</span></footer></button>`
+ }
+ renderPawnGallery(){
+  const v=$('#view');
+  const showOpenFiles=this.pawnGalleryShowOpenFiles!==false;
+  const savedFilter=String(this.pawnGalleryFilter||'').replace(/[^01239]/g,'').slice(0,4);
+  v.classList.toggle('pawn-gallery-hide-open',!showOpenFiles);
+  v.innerHTML=`<section class="page-head pawn-gallery-head"><button data-pawn-gallery-back aria-label="Volver">←</button><div><small>INVESTIGACIÓN · TAXONOMÍA ELEMENTAL</small><h1>Galería de 625 microestructuras de peones</h1><p>Cada código <b>abcd</b> usa cinco estados por archivo: 0, 1, 2 o 3 indican avance desde la casilla inicial y <b>9</b> indica que ese peón ya no está.</p></div></section>
+  <section class="pawn-gallery-method panel"><div class="pawn-color-legend"><span><i class="legend-blue"></i><b>Azul</b> detrás de cada peón</span><span><i class="legend-green"></i><b>Verde</b> casillas atacadas / de apoyo</span><span><i class="legend-orange"></i><b>Naranja</b> por delante y sin control propio</span><span data-purple-legend><i class="legend-purple"></i><b>Morado</b> columna abierta (estado 9)</span><span><i class="legend-double">2×</i><b>2×</b> doble control</span></div><p>Orientación canónica: los peones avanzan hacia arriba. Cada diagrama es un tablero 6×6; la ventana estructural 4×4 queda centrada, con un margen de una casilla alrededor para mostrar retaguardia, frente y control exterior. El estado <b>9</b> representa ausencia. El morado puede ocultarse desde la casilla de verificación sin alterar el código ni las métricas. En cualquier superposición, <b>el verde tiene prioridad visual</b>.</p></section>
+  <section class="pawn-gallery-toolbar"><label class="pawn-gallery-search-label">Buscar código<input data-pawn-gallery-search inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="4" placeholder="Ej. 1239" value="${savedFilter}"></label><label class="pawn-gallery-purple-toggle"><input type="checkbox" data-pawn-gallery-purple ${showOpenFiles?'checked':''}><span>Pintar columnas abiertas (morado)</span></label><span data-pawn-gallery-count>${PAWN_STRUCTURE_CODES.length} / ${PAWN_STRUCTURE_CODES.length}</span><button type="button" data-pawn-gallery-clear>Mostrar todas</button></section>
+  <section class="pawn-gallery-grid">${PAWN_STRUCTURE_CODES.map(code=>this.pawnStructureCardHtml(code)).join('')}</section>`;
+  $('[data-pawn-gallery-back]')?.addEventListener('click',()=>{this.screen='home';this.render()});
+  const search=$('[data-pawn-gallery-search]'),count=$('[data-pawn-gallery-count]'),purple=$('[data-pawn-gallery-purple]');
+  const apply=()=>{
+   const query=(search?.value||this.pawnGalleryFilter||'').replace(/[^01239]/g,'').slice(0,4);
+   this.pawnGalleryFilter=query;
+   if(search&&search.value!==query)search.value=query;
+   let visible=0;
+   $$('[data-pawn-structure]').forEach(card=>{const show=!query||card.dataset.code.includes(query);card.hidden=!show;if(show)visible+=1});
+   if(count)count.textContent=`${visible} / ${PAWN_STRUCTURE_CODES.length}`;
+  };
+  apply();
+  search?.addEventListener('input',apply);
+  search?.addEventListener('change',apply);
+  purple?.addEventListener('change',event=>{
+   this.pawnGalleryShowOpenFiles=event.target.checked;
+   this.db.settings.pawnGalleryShowOpenFiles=event.target.checked;
+   saveDb(this.db);
+   v.classList.toggle('pawn-gallery-hide-open',!event.target.checked);
+   $('[data-purple-legend]')?.classList.toggle('disabled',!event.target.checked);
+  });
+  $('[data-purple-legend]')?.classList.toggle('disabled',!showOpenFiles);
+  $('[data-pawn-gallery-clear]')?.addEventListener('click',event=>{event.preventDefault();this.pawnGalleryFilter='';if(search)search.value='';apply();search?.focus()});
+  $$('[data-pawn-structure]').forEach(card=>card.addEventListener('click',()=>this.openPawnStructureDetail(card.dataset.code)));
+ }
+ openPawnStructureDetail(initialCode){
+  const modal=document.createElement('div');modal.className=`modal pawn-structure-modal ${this.pawnGalleryShowOpenFiles===false?'pawn-gallery-hide-open':''}`;
+  // Este modal vive fuera de .app; copia explícitamente el tema activo para no perder
+  // las variables --light/--dark/--accent del tablero seleccionado en Configuración.
+  const pawnTheme=THEMES[this.db.settings.boardColor]||THEMES.blue;
+  modal.style.setProperty('--light',pawnTheme.light);
+  modal.style.setProperty('--dark',pawnTheme.dark);
+  modal.style.setProperty('--accent',pawnTheme.accent);
+  let currentCode=initialCode;
+  const signed=value=>value==null?'—':value>0?`+${value}`:`${value}`;
+  const renderCode=code=>{
+   currentCode=code;
+   const analysis=analyzePawnStructure(code),index=PAWN_STRUCTURE_CODES.indexOf(code),last=PAWN_STRUCTURE_CODES.length-1;
+   const annotationState=this.pawnStructureAnnotationState(code);
+   modal.innerHTML=`<div class="dialog pawn-structure-dialog"><header><div><small>MICROESTRUCTURA · VECTOR [${analysis.heights.join(', ')}]</small><h2>${analysis.code}</h2></div><nav class="pawn-structure-dialog-nav" aria-label="Navegación entre estructuras"><button type="button" data-pawn-prev aria-label="Estructura anterior" ${index<=0?'disabled':''}>←</button><span>${index+1} / ${PAWN_STRUCTURE_CODES.length}</span><button type="button" data-pawn-next aria-label="Estructura siguiente" ${index>=last?'disabled':''}>→</button><button type="button" data-close aria-label="Cerrar">×</button></nav></header><div class="pawn-structure-detail-grid"><section>${this.pawnStructureBoardHtml(analysis,true,annotationState)}${this.pawnStructureAnnotationToolbar()}<div class="pawn-color-legend compact"><span><i class="legend-blue"></i>Detrás</span><span><i class="legend-green"></i>Ataque / apoyo</span><span><i class="legend-orange"></i>Delante sin control</span><span><i class="legend-purple"></i>Columna abierta</span></div></section><section class="pawn-structure-metrics"><article><span>Casillas de espacio (azules)</span><b>${analysis.behindCount}</b></article><article><span>Casillas controladas (verdes)</span><b>${analysis.controlledUniqueCount}</b></article><article><span>Casillas al frente no controladas (naranjas)</span><b>${analysis.aheadUncontrolledCount}</b></article><article><span>Gradiente</span><b>(${analysis.gradient.map(signed).join(', ')})</b></article><p class="pawn-gradient-note"><b>¿Qué significa el gradiente?</b> Es el cambio de altura entre peones adyacentes: <code>(b−a, c−b, d−c)</code>. Un valor positivo indica que la estructura sube hacia la derecha; uno negativo, que baja; <b>0</b> significa misma altura y <b>—</b> aparece cuando ese tramo contiene un peón ausente (9).</p></section></div><footer class="pawn-structure-note">El estado <b>9</b> significa que el peón ya no está y su archivo se muestra en <b>morado</b>. En una superposición, <b>el verde tiene prioridad sobre el morado</b>: una casilla controlada siempre permanece verde. Los cuatro indicadores son descriptivos y no califican la estructura como buena o mala.</footer></div>`;
+   this.bindPawnStructureAnnotationBoard(modal,code,renderCode);
+   $('[data-pawn-prev]',modal)?.addEventListener('click',()=>{if(index>0)renderCode(PAWN_STRUCTURE_CODES[index-1])});
+   $('[data-pawn-next]',modal)?.addEventListener('click',()=>{if(index<last)renderCode(PAWN_STRUCTURE_CODES[index+1])});
+   $('[data-close]',modal)?.addEventListener('click',close);
+  };
+  const onKey=event=>{
+   const index=PAWN_STRUCTURE_CODES.indexOf(currentCode);
+   if(event.key==='ArrowLeft'&&index>0){event.preventDefault();renderCode(PAWN_STRUCTURE_CODES[index-1])}
+   else if(event.key==='ArrowRight'&&index<PAWN_STRUCTURE_CODES.length-1){event.preventDefault();renderCode(PAWN_STRUCTURE_CODES[index+1])}
+   else if(event.key==='Escape')close();
+  };
+  const close=()=>{document.removeEventListener('keydown',onKey);modal.remove()};
+  document.body.appendChild(modal);renderCode(initialCode);document.addEventListener('keydown',onKey);modal.addEventListener('click',event=>{if(event.target===modal)close()});
+ }
+ renderSetup(){
+  this.ensureOpponentConfigs();
+  const mode=this.cfg.mode,elo=this.eloForSkill(this.cfg.skill),v=$('#view');
+  const opponentCards=this.cfg.opponents.map((o,i)=>`<article class="opponent-card ${i>=this.cfg.simultaneous?'hidden':''}" data-opponent-card="${i}"><header><b>Tablero ${i+1}</b><span>Contrincante ${i+1}</span></header><div class="opponent-grid"><label>Tu color<select id="oppHumanColor${i}"><option value="w">Blancas</option><option value="b">Negras</option></select></label><label>Estilo<select id="oppStyle${i}"><option value="zero">Zero · defensivo</option><option value="omega">Omega · hiperagresivo</option></select></label><label>Nivel Stockfish<input id="oppSkill${i}" data-opp-skill="${i}" type="range" min="1" max="20" value="${o.skill}"><output id="oppSkillOut${i}">${o.skill}/20 · Elo aprox. ${this.eloForSkill(o.skill)}</output></label><label class="advanced-field">Profundidad<input id="oppDepth${i}" type="number" min="1" max="64" value="${o.depth}"></label><label class="advanced-field">Variantes<input id="oppMultiPv${i}" type="number" min="1" max="8" value="${o.multiPv}"></label><label class="opp-color-field ${this.cfg.separateBoardColors?'':'hidden'}">Color del tablero<select id="oppBoardColor${i}">${Object.entries(THEMES).map(([id,t])=>`<option value="${id}">${t.name}</option>`).join('')}</select></label><label class="span2">Apertura o defensa${this.openingPicker(`oppOpening${i}`,o.opening)}</label></div></article>`).join('');
+  const timePresetValue=this.cfg.clock?`${this.cfg.minutes}+${this.cfg.increment}`:'off';
+  const knownTimePresets=['off','3+0','3+2','5+0','10+0','15+10','30+0'];
+  const timePresetOptions=[['off','Sin reloj'],['3+0','3 + 0'],['3+2','3 + 2'],['5+0','5 + 0'],['10+0','10 + 0'],['15+10','15 + 10'],['30+0','30 + 0']].map(([value,label])=>`<option value="${value}" ${timePresetValue===value?'selected':''}>${label}</option>`).join('')+(!knownTimePresets.includes(timePresetValue)?`<option value="${timePresetValue}" selected>Personalizado · ${this.cfg.minutes} + ${this.cfg.increment}</option>`:'');
+  v.innerHTML=`<section class="page-head"><button data-back>←</button><div><small>CONFIGURAR PARTIDA</small><h1>${mode==='pvp'?'J1 vs J2':mode==='pvc'?'J1 vs COM':'COM vs COM'}</h1></div></section><div class="setup-mode-tabs"><button data-setup-mode="quick" class="${this.cfg.setupMode==='quick'?'active':''}">Configuración rápida</button><button data-setup-mode="advanced" class="${this.cfg.setupMode==='advanced'?'active':''}">Configuración avanzada</button></div><section class="panel form-grid ${this.cfg.setupMode==='quick'?'quick-mode':'advanced-mode'}">
+  ${mode==='pvc'?`<label>Partidas simultáneas<input id="simultaneous" type="number" min="1" max="5" value="${this.cfg.simultaneous}"></label><label class="toggle"><input id="separateBoardColors" type="checkbox" ${this.cfg.separateBoardColors?'checked':''}><span>Colores diferentes por tablero</span></label><label class="toggle span2"><input id="independentSimClocks" type="checkbox" ${this.cfg.independentSimClocks?'checked':''}><span>Reloj independiente para cada partida</span></label><small class="span2 sim-clock-help">Activado: todos los relojes continúan en segundo plano. Desactivado: solo corre el reloj del tablero visible.</small><small class="span2">Puedes enfrentar entre 1 y 5 contrincantes. Después de tu movimiento, OmegaZero pasa automáticamente al siguiente tablero disponible.</small><div class="simultaneous-configs span2">${opponentCards}</div>`:''}
+  ${mode==='cvc'?`<label>IA blancas<select id="white"><option value="zero">Zero</option><option value="omega">Omega</option></select></label><label>IA negras<select id="black"><option value="zero">Zero</option><option value="omega">Omega</option></select></label><label>Partidas automáticas<input id="repeat" type="number" min="1" max="100" value="${this.cfg.repeat}"></label><label class="toggle"><input id="alternateColors" type="checkbox" ${this.cfg.alternateColors?'checked':''}><span>Alternar colores entre partidas</span></label><label class="advanced-field">Diversidad entre candidatas (%)<input id="diversity" type="range" min="0" max="60" value="${this.cfg.diversity}"><output id="diversityOut">${this.cfg.diversity}%</output></label><label class="toggle"><input id="autoPlay" type="checkbox" ${this.cfg.autoPlay?'checked':''}><span>Rotación automática de turnos</span></label><small class="span2">Activa la alternancia continua entre ambas IA. Al desactivarla, usa “Siguiente jugada” para avanzar turno por turno.</small>`:''}
+  ${mode==='cvc'?`<label>Nivel Stockfish<input id="skill" type="range" min="1" max="20" value="${this.cfg.skill}"><output id="skillOut">${this.cfg.skill}/20 · Elo aprox. ${elo}</output></label><label class="advanced-field">Profundidad<input id="depth" type="number" min="1" max="64" value="${this.cfg.depth}"></label><label class="advanced-field">Variantes<input id="multiPv" type="number" min="1" max="8" value="${this.cfg.multiPv}"></label><label class="toggle span2"><input id="independentOpenings" type="checkbox" ${this.cfg.independentOpenings?'checked':''}><span>Aperturas independientes</span></label><div id="openingShared" class="span2 ${this.cfg.independentOpenings?'hidden':''}"><label>Apertura compartida${this.openingPicker('opening',this.cfg.opening)}</label><small>Ambas IA siguen la misma línea mientras sea legal.</small></div><div id="openingIndependent" class="span2 opening-pair ${this.cfg.independentOpenings?'':'hidden'}"><label>Repertorio de blancas${this.openingPicker('whiteOpening',this.cfg.whiteOpening)}</label><label>Repertorio de negras${this.openingPicker('blackOpening',this.cfg.blackOpening)}</label><small class="span2">Cada bando intenta su propio esquema. Si las líneas chocan, OmegaZero busca la transposición legal más cercana.</small></div>`:''}
+  ${mode==='pvp'?`<label class="quick-only span2">Control de tiempo<select id="timePreset">${timePresetOptions}</select></label>`:''}<label class="toggle span2"><input id="clock" type="checkbox" ${this.cfg.clock?'checked':''}><span>Usar reloj</span></label><label class="${mode==='pvp'?'advanced-field':''}">Minutos<input id="minutes" type="number" min="1" max="180" value="${this.cfg.minutes}"></label><label class="${mode==='pvp'?'advanced-field':''}">Incremento (s)<input id="increment" type="number" min="0" max="60" value="${this.cfg.increment}"></label><button id="start" class="primary span2">INICIAR PARTIDA →</button></section>`;
+  $('[data-back]').onclick=()=>{this.screen='home';this.render()};
+  for(const id of ['white','black'])if($('#'+id))$('#'+id).value=this.cfg[id];
+  this.cfg.opponents.forEach((o,i)=>{for(const [field,prefix] of [['humanColor','oppHumanColor'],['style','oppStyle'],['boardColor','oppBoardColor']])if($('#'+prefix+i))$('#'+prefix+i).value=o[field]});
+  $('#skill')?.addEventListener('input',e=>$('#skillOut').textContent=`${e.target.value}/20 · Elo aprox. ${this.eloForSkill(e.target.value)}`);
+  $$('[data-opp-skill]').forEach(x=>x.addEventListener('input',e=>{$(`#oppSkillOut${e.target.dataset.oppSkill}`).textContent=`${e.target.value}/20 · Elo aprox. ${this.eloForSkill(e.target.value)}`}));
+  $('#simultaneous')?.addEventListener('input',e=>{const n=clamp(e.target.value,1,5);$$('[data-opponent-card]').forEach((c,i)=>c.classList.toggle('hidden',i>=n))});
+  $('#separateBoardColors')?.addEventListener('change',e=>$$('.opp-color-field').forEach(x=>x.classList.toggle('hidden',!e.target.checked)));
+  $('#independentOpenings')?.addEventListener('change',e=>{$('#openingShared').classList.toggle('hidden',e.target.checked);$('#openingIndependent').classList.toggle('hidden',!e.target.checked)});
+  $('#timePreset')?.addEventListener('change',event=>{const value=event.target.value,clock=$('#clock'),minutes=$('#minutes'),increment=$('#increment');if(value==='off'){clock.checked=false;return}const [m,inc]=value.split('+').map(Number);clock.checked=true;if(minutes)minutes.value=m;if(increment)increment.value=inc});
+  $$('[data-setup-mode]').forEach(button=>button.onclick=()=>{this.captureSetupForm();this.cfg.setupMode=button.dataset.setupMode;this.persistSetupConfig();this.renderSetup()});$('#diversity')?.addEventListener('input',event=>$('#diversityOut').textContent=`${event.target.value}%`);
+  this.bindOpeningPickers();this.bindLiveSetupPersistence();$('#start').onclick=()=>this.startGameFromForm();
+ }
+ openingPicker(id,value='auto'){const op=getOpening(value);return `<button type="button" class="opening-picker" data-opening-target="${id}"><span>${op?op.name:'Automática / mejor transposición'}</span><b>Explorar ▾</b></button><input type="hidden" id="${id}" value="${value}">`}
+ bindOpeningPickers(){$$('[data-opening-target]').forEach(b=>b.onclick=()=>this.openOpeningModal(b.dataset.openingTarget));}
+ openOpeningModal(target){
+  const current=$('#'+target)?.value||'auto';
+  this.db.settings.favoriteOpenings=this.db.settings.favoriteOpenings||[];
+  this.db.settings.recentOpenings=this.db.settings.recentOpenings||[];
+  const favorites=this.db.settings.favoriteOpenings.map(getOpening).filter(Boolean);
+  const recent=this.db.settings.recentOpenings.map(getOpening).filter(Boolean);
+  const openingStats=buildGameStats(this.db.games).openings;
+  const choiceHtml=(opening,extra='')=>`<button class="opening-choice ${current===opening.id?'active':''}" data-opening-id="${opening.id}" data-zero="${opening.zero}" data-omega="${opening.omega}" ${extra}><span>${opening.name}</span><small>${opening.id} · ${opening.kind} · ${openingStats[opening.name]?.games||0} partidas</small></button>`;
+  const modal=document.createElement('div');modal.className='modal opening-modal';
+  modal.innerHTML=`<div class="dialog opening-dialog opening-explorer"><header><div><small>BIBLIOTECA DE APERTURAS · ${OPENINGS.length} registros</small><h2>Escoge una línea, defensa o esquema</h2><p class="favorite-count">Favoritas: ${favorites.length}/10</p></div><button data-close aria-label="Cerrar">×</button></header><div class="opening-explorer-grid"><section class="opening-browser-column"><div class="opening-filter-row"><input class="opening-search" placeholder="Buscar nombre, familia o ECO…"><select data-opening-style><option value="all">Todos los estilos</option><option value="zero">Afinidad Zero</option><option value="omega">Afinidad Omega</option></select></div><div class="opening-tree" tabindex="0"><button class="opening-choice ${current==='auto'?'active':''}" data-opening-id="auto">Automática / reconocer por posición</button>${favorites.length?`<section class="favorite-openings"><h3>★ Favoritas</h3>${favorites.map(opening=>choiceHtml(opening)).join('')}</section>`:''}${recent.length?`<section class="recent-openings"><h3>Recientes</h3>${recent.map(opening=>choiceHtml(opening)).join('')}</section>`:''}${openingTreeHtml(current)}<details class="opening-category master-games-category"><summary>Partidas magistrales</summary><div class="master-game-list">${MASTER_GAMES.map(game=>`<button type="button" class="master-game-choice" data-master-game-id="${game.id}"><b>${esc(this.masterGameTitle(game))}</b><span>${esc(game.white)} vs ${esc(game.black)}</span><small>${game.year||game.date} · ${game.eco||'—'} · ${game.opening||'Apertura no identificada'}${game.variation?` · ${game.variation}`:''} · ${game.result}</small></button>`).join('')}</div></details></div></section><aside class="opening-preview" data-opening-preview><div class="opening-preview-board"></div><h3>Selecciona una apertura</h3><p>La vista previa usa la posición final de la línea registrada. OmegaZero reconoce también transposiciones mediante FEN.</p></aside></div></div>`;
+  document.body.appendChild(modal);const close=()=>modal.remove();$('[data-close]',modal).onclick=close;modal.onclick=event=>{if(event.target===modal)close()};
+  const preview=(id)=>{const opening=getOpening(id),panel=$('[data-opening-preview]',modal);if(!opening||!panel)return;const fen=openingPreview(id);let board='';try{const chess=fen?new Chess(fen):new Chess();board=this.boardHtml(chess,false)}catch{board=''}panel.innerHTML=`<div class="opening-preview-board"><div class="board">${board}</div></div><h3>${opening.name}</h3><p>${opening.category} · ${opening.family}</p><div class="affinity"><span>Zero <b>${Math.round(opening.zero*100)}%</b></span><span>Omega <b>${Math.round(opening.omega*100)}%</b></span></div><small>${opening.moves.join(' ')||'Esquema posicional sin orden fijo.'}</small>`};
+  $$('[data-opening-id]',modal).forEach(choice=>{const id=choice.dataset.openingId;if(id!=='auto'){const star=document.createElement('button');star.className='favorite-star '+(this.db.settings.favoriteOpenings.includes(id)?'active':'');star.textContent=this.db.settings.favoriteOpenings.includes(id)?'★':'☆';star.title='Marcar como favorita';star.onclick=event=>{event.stopPropagation();const list=this.db.settings.favoriteOpenings,index=list.indexOf(id);if(index>=0)list.splice(index,1);else if(list.length<10)list.push(id);else return alert('Puedes marcar hasta 10 aperturas favoritas.');saveDb(this.db);close();this.openOpeningModal(target)};choice.appendChild(star);choice.addEventListener('mouseenter',()=>preview(id));choice.addEventListener('focus',()=>preview(id))}choice.onclick=event=>{if(event.target.closest('.favorite-star'))return;$('#'+target).value=id;const opening=getOpening(id);$(`[data-opening-target="${target}"] span`).textContent=opening?opening.name:'Automática / reconocer por posición';if(opening)this.db.settings.recentOpenings=[id,...this.db.settings.recentOpenings.filter(item=>item!==id)].slice(0,10);this.captureSetupForm();this.persistSetupConfig();close()}});
+  $$('[data-master-game-id]',modal).forEach(button=>button.onclick=()=>{const game=MASTER_GAMES.find(item=>item.id===button.dataset.masterGameId);if(!game)return;close();this.openMasterGameInAnalysis(game.id)});
+  const applyFilter=()=>{const query=$('.opening-search',modal).value.toLowerCase().trim(),style=$('[data-opening-style]',modal).value;$$('.opening-choice[data-opening-id]',modal).forEach(choice=>{const opening=getOpening(choice.dataset.openingId);const text=choice.textContent.toLowerCase();const styleOk=!opening||style==='all'||(style==='zero'?opening.zero>=.7:opening.omega>=.7);choice.classList.toggle('search-hidden',Boolean(query&&!text.includes(query))||!styleOk)});$$('.opening-family,.opening-category',modal).forEach(group=>{const visible=$$('.opening-choice:not(.search-hidden)',group).length+$$('.master-game-choice:not(.search-hidden)',group).length;group.classList.toggle('search-hidden',visible===0);if(query&&visible>0)group.open=true})};
+  $('.opening-search',modal).oninput=applyFilter;$('[data-opening-style]',modal).onchange=applyFilter;if(current!=='auto')preview(current);requestAnimationFrame(()=>$('.opening-tree',modal)?.focus({preventScroll:true}));
+ }
+ persistSetupConfig(){
+  this.db.settings.setupMode=this.cfg.setupMode;
+  this.db.settings.gameConfig={
+   white:this.cfg.white,black:this.cfg.black,humanColor:this.cfg.humanColor,style:this.cfg.style,
+   depth:this.cfg.depth,multiPv:this.cfg.multiPv,skill:this.cfg.skill,opening:this.cfg.opening,
+   whiteOpening:this.cfg.whiteOpening,blackOpening:this.cfg.blackOpening,independentOpenings:this.cfg.independentOpenings,
+   autoPlay:this.cfg.autoPlay,clock:this.cfg.clock,minutes:this.cfg.minutes,increment:this.cfg.increment,
+   repeat:this.cfg.repeat,simultaneous:this.cfg.simultaneous,separateBoardColors:this.cfg.separateBoardColors,
+   alternateColors:this.cfg.alternateColors,diversity:this.cfg.diversity,
+   opponents:this.cfg.opponents.map(opponent=>({...opponent}))
+  };
+  saveDb(this.db);
+ }
+ bindLiveSetupPersistence(){
+  const sync=()=>{this.captureSetupForm();this.persistSetupConfig()};
+  $$('.form-grid input,.form-grid select').forEach(control=>{
+   const eventName=control.type==='range'||control.type==='number'||control.tagName==='SELECT'?'input':'change';
+   control.addEventListener(eventName,sync);
+   if(eventName!=='change')control.addEventListener('change',sync);
+  });
+ }
+ captureSetupForm(){
+  if(!$('#clock'))return;
+  const preset=$('#timePreset')?.value;
+  if(preset&&preset!=='off'&&this.cfg.setupMode==='quick'){const [minutes,increment]=preset.split('+').map(Number);if(Number.isFinite(minutes))this.cfg.minutes=clamp(minutes,1,180);if(Number.isFinite(increment))this.cfg.increment=clamp(increment,0,60)}
+  for(const id of ['white','black','opening','whiteOpening','blackOpening'])if($('#'+id))this.cfg[id]=$('#'+id).value;
+  for(const id of ['depth','multiPv','skill','minutes','increment','repeat','diversity'])if($('#'+id))this.cfg[id]=clamp($('#'+id).value,id==='increment'?0:1,id==='depth'?64:id==='repeat'?100:id==='minutes'?180:id==='multiPv'?8:id==='diversity'?60:20);
+  this.cfg.independentOpenings=$('#independentOpenings')?.checked||false;this.cfg.autoPlay=$('#autoPlay')?.checked??this.cfg.autoPlay;this.cfg.alternateColors=$('#alternateColors')?.checked??this.cfg.alternateColors;this.cfg.clock=$('#clock').checked;
+  if(this.cfg.mode==='pvc'){
+   this.cfg.simultaneous=clamp($('#simultaneous')?.value||1,1,5);this.cfg.separateBoardColors=$('#separateBoardColors')?.checked||false;this.cfg.independentSimClocks=$('#independentSimClocks')?.checked??this.cfg.independentSimClocks;
+   this.cfg.opponents=this.cfg.opponents.map((old,i)=>({...old,humanColor:$(`#oppHumanColor${i}`)?.value||old.humanColor,style:$(`#oppStyle${i}`)?.value||old.style,skill:clamp($(`#oppSkill${i}`)?.value||old.skill,1,20),depth:clamp($(`#oppDepth${i}`)?.value||old.depth,1,64),multiPv:clamp($(`#oppMultiPv${i}`)?.value||old.multiPv,1,8),opening:$(`#oppOpening${i}`)?.value||old.opening,boardColor:$(`#oppBoardColor${i}`)?.value||old.boardColor}));
+   const first=this.cfg.opponents[0];Object.assign(this.cfg,{humanColor:first.humanColor,style:first.style,skill:first.skill,depth:first.depth,multiPv:first.multiPv,opening:first.opening});
+  }
+ }
+ startGameFromForm(){
+  this.captureSetupForm();this.persistSetupConfig();
+  if(this.cfg.mode==='pvc'){
+   if(this.cfg.simultaneous>1){this.startSimultaneousGames();return}
+  }
+  this.simultaneous=null;this.series={current:1,total:this.cfg.mode==='cvc'?this.cfg.repeat:1};this.resetGamePosition();this.screen='game';this.render();this.startClock();
+  if((this.cfg.mode==='cvc'&&this.cfg.autoPlay)||(this.cfg.mode==='pvc'&&this.cfg.humanColor==='b'))setTimeout(()=>this.comMove(),350);
+ }
+ opponentDefaults(index=0){return {id:`Tablero ${index+1}`,humanColor:'w',style:index%2?'omega':'zero',skill:20,depth:14,multiPv:3,opening:'auto',boardColor:['blue','red','green','yellow','purple'][index%5]}}
+ ensureOpponentConfigs(){if(!Array.isArray(this.cfg.opponents))this.cfg.opponents=[];for(let i=0;i<5;i++)this.cfg.opponents[i]={...this.opponentDefaults(i),...(this.cfg.opponents[i]||{})}}
+ isSimultaneous(){return this.cfg.mode==='pvc'&&Boolean(this.simultaneous?.games?.length>1)}
+ createSimSession(config,index){const chess=new Chess();return {id:`Tablero ${index+1}`,index,chess,config:{...config},selected:null,legal:[],lastMove:null,positions:[{fen:chess.fen(),ply:0}],gameSaved:false,thinking:false,clock:{w:this.cfg.minutes*60,b:this.cfg.minutes*60,last:performance.now()},lastMoveQuality:null,annotations:new Map(),arrows:[],boardFlipped:config.humanColor==='b',result:null}}
+ startSimultaneousGames(){this.stopClock();this.simultaneous={active:-1,games:this.cfg.opponents.slice(0,this.cfg.simultaneous).map((o,i)=>this.createSimSession(o,i))};this.simEngineQueue=Promise.resolve();this.activateSimBoard(0,false,true);this.screen='game';this.render();this.startClock();this.simultaneous.games.forEach((g,i)=>{if(g.config.humanColor==='b')this.enqueueSimReply(i)})}
+ activeSimSession(){return this.isSimultaneous()?this.simultaneous.games[this.simultaneous.active]:null}
+ syncActiveSimSession(){const s=this.activeSimSession();if(!s)return;s.chess=this.chess;s.selected=this.selected;s.legal=this.legal;s.lastMove=this.lastMove;s.positions=this.positions;s.gameSaved=this.gameSaved;s.clock=this.clock;s.lastMoveQuality=this.lastMoveQuality;s.annotations=this.annotations;s.arrows=this.arrows;s.boardFlipped=this.boardFlipped;s.thinking=this.thinking}
+ activateSimBoard(index,paint=true,skipSync=false){if(!this.simultaneous)return;if(!skipSync)this.syncActiveSimSession();const total=this.simultaneous.games.length;this.simultaneous.active=(index+total)%total;const now=performance.now();if(!this.cfg.independentSimClocks)this.simultaneous.games.forEach(game=>{game.clock.last=now});const s=this.simultaneous.games[this.simultaneous.active];this.chess=s.chess;this.selected=s.selected;this.legal=s.legal;this.lastMove=s.lastMove;this.positions=s.positions;this.gameSaved=s.gameSaved;this.clock=s.clock;this.lastMoveQuality=s.lastMoveQuality;this.annotations=s.annotations;this.arrows=s.arrows;this.boardFlipped=s.boardFlipped;this.thinking=s.thinking;Object.assign(this.cfg,{humanColor:s.config.humanColor,style:s.config.style,skill:s.config.skill,depth:s.config.depth,multiPv:s.config.multiPv,opening:s.config.opening});if(paint)this.renderGame()}
+ nextSimBoard(){if(!this.isSimultaneous())return;const start=this.simultaneous.active,total=this.simultaneous.games.length;let chosen=(start+1)%total;for(let n=1;n<=total;n++){const i=(start+n)%total,g=this.simultaneous.games[i];if(!g.result&&!g.thinking&&g.chess.turn()===g.config.humanColor){chosen=i;break}}this.activateSimBoard(chosen)}
+ enqueueSimReply(index){const s=this.simultaneous?.games[index];if(!s||s.thinking||s.result||fideGameState(s.chess,s.positions).terminal)return;s.thinking=true;if(index===this.simultaneous.active){this.thinking=true;this.renderGame()}this.simEngineQueue=this.simEngineQueue.catch(()=>{}).then(()=>this.runSimReply(index))}
+ async runSimReply(index){const s=this.simultaneous?.games[index];if(!s)return;const color=s.chess.turn(),style=s.config.style,before=s.chess.fen();try{let chosen=null;const op=getOpening(s.config.opening);if(op&&s.chess.history().length<op.moves.length){const san=op.moves[s.chess.history().length],legal=s.chess.moves({verbose:true}).find(m=>m.san.replace(/[+#]/g,'')===san.replace(/[+#]/g,''));if(legal)chosen={uci:legal.from+legal.to+(legal.promotion||''),book:true}}let cand=[];if(!chosen||s.config.multiPv>1)cand=await this.engine.analyse(before,{depth:s.config.depth,multiPv:Math.max(3,s.config.multiPv),skill:s.config.skill});if(s.chess.fen()!==before)return;if(!chosen)chosen=chooseBotCandidate(s.chess,cand,style,resolveBotScheme(style,color),color,{},style)||cand[0];const m=s.chess.move(uciToMove(chosen.uci));if(m){s.lastMove=[m.from,m.to];s.positions.push({fen:s.chess.fen(),ply:s.chess.history().length});if(this.cfg.clock){s.clock[m.color]+=this.cfg.increment;s.clock.last=performance.now()}s.lastMoveQuality=this.classifyEngineChoice(chosen,cand,m);const fide=fideGameState(s.chess,s.positions);if(fide.terminal){s.result=fide.reason;this.finishSimSession(s,fide.reason)}}}catch{/* La partida sigue disponible para reintentar. */}finally{s.thinking=false;if(this.simultaneous&&index===this.simultaneous.active)this.activateSimBoard(index,true,true)}}
+ finishSimSession(s,reason){if(!s||s.gameSaved||s.chess.history().length<2)return;const state=fideGameState(s.chess,s.positions),result=reason.includes('tablas')||state.result==='1/2-1/2'?'1/2-1/2':(reason==='tiempo'?timeoutResult(s.chess,s.chess.turn()):(state.terminal?state.result:'*')),engineName=s.config.style==='omega'?'Omega':'Zero',opening=identifyOpening(s.chess.history(),s.chess.fen());const game={id:crypto.randomUUID?.()||String(Date.now()),date:new Date().toISOString(),mode:'pvc-simultaneous',white:s.config.humanColor==='w'?'J1':engineName,black:s.config.humanColor==='b'?'J1':engineName,humanColor:s.config.humanColor,engineStyle:s.config.style,engineSkill:Number(s.config.skill),engineElo:this.eloForSkill(s.config.skill),engineDepth:Number(s.config.depth),engineMultiPv:Number(s.config.multiPv),independentSimClocks:Boolean(this.cfg.independentSimClocks),result,pgn:s.chess.pgn(),fen:s.chess.fen(),reason,boardId:s.id,openingId:opening?.id||s.config.opening||null,openingName:opening?.name||getOpening(s.config.opening)?.name||'Fuera de libro',positions:s.positions};addGame(this.db,game);addProblemsFromGame(this.db,game);s.gameSaved=true}
+ finishAllSimGames(reason){if(!this.isSimultaneous())return;this.syncActiveSimSession();this.simultaneous.games.forEach(s=>this.finishSimSession(s,reason))}
+ resetGamePosition(){this.chess.reset();this.selected=null;this.legal=[];this.lastMove=null;this.positions=[{fen:this.chess.fen(),ply:0}];this.gameSaved=false;this.paused=false;this.boardFlipped=this.cfg.mode==='pvc'&&this.cfg.humanColor==='b';this.analysis=null;this.lastMoveQuality=null;this.annotations.clear();this.arrows=[];this.rightAnnotation=null;this.clock={w:this.cfg.minutes*60,b:this.cfg.minutes*60,last:performance.now(),timer:null};}
+ boardHtml(chess=this.chess,interactive=true){
+  const files='abcdefgh';let out='';const ranks=this.boardFlipped?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1],fs=this.boardFlipped?[7,6,5,4,3,2,1,0]:[0,1,2,3,4,5,6,7];
+  for(const r of ranks)for(const f of fs){const sq=files[f]+r,p=chess.get(sq),sel=this.selected===sq,legal=this.legal.includes(sq),last=this.lastMove?.includes(sq),mark=this.annotations.get(sq);const legalType=legal?(p?'capture':'quiet'):'';out+=`<button class="sq ${(f+r)%2?'light':'dark'} ${p?'occupied':''} ${sel?'selected':''} ${legal?'legal '+legalType:''} ${last?'last':''} ${mark?'marked mark-'+mark:''}" data-square="${sq}" role="gridcell" aria-label="${boardSquareAria(sq,p,sel)}" ${interactive?'tabindex="'+(sel?'0':'-1')+'"':'disabled'}>${p?`<img src="${this.pieceSrc(p.color,p.type)}" draggable="false">`:''}${r===(this.boardFlipped?8:1)?`<i class="file">${files[f]}</i>`:''}${f===(this.boardFlipped?7:0)?`<i class="rank">${r}</i>`:''}</button>`}return out;
+ }
+ pieceSrc(c,t){return this.db.custom.pieces[c+t]||publicAsset(`pieces/alpha/${PIECE[c+t]}.png`, APP_VERSION)}
+  captureGameScroll(){const aside=$('.game-layout aside'),moves=$('.game-layout .moves'),view=$('#view');return {windowY:window.scrollY,aside:aside?.scrollTop||0,moves:moves?.scrollTop||0,view:view?.scrollTop||0}}
+ restoreGameScroll(state){if(!state)return;const apply=()=>{const aside=$('.game-layout aside'),moves=$('.game-layout .moves'),view=$('#view');if(aside)aside.scrollTop=state.aside;if(moves)moves.scrollTop=state.moves;if(view&&state.view)view.scrollTop=state.view;window.scrollTo(0,state.windowY)};requestAnimationFrame(()=>{apply();requestAnimationFrame(apply);setTimeout(apply,40)})}
+ renderGame(){
+  this.syncActiveSimSession();
+  const scrollState=this.captureGameScroll();
+  const mode=this.cfg.mode,sim=this.isSimultaneous(),session=this.activeSimSession(),op=identifyOpening(this.chess.history(),this.chess.fen()),v=$('#view');
+  const series=mode==='cvc'?`<small>Partida ${this.series.current}/${this.series.total} · ${this.cfg.autoPlay?'juego continuo':'avance manual'}</small>`:sim?`<small>${session.id} · ${this.simultaneous.active+1}/${this.simultaneous.games.length} · ${session.thinking?'OmegaZero calculando':session.result||'tu turno cuando corresponda'}</small>`:'';
+  const liveControls=mode==='cvc'?`<div class="game-live-controls"><button data-pause>${this.paused?'▶ Reanudar':'⏸ Pausa'}</button><button data-step>▶ Siguiente jugada</button></div>`:'';
+  const simControls=sim?`<div class="sim-board-tabs">${this.simultaneous.games.map((g,i)=>`<button data-sim-board="${i}" class="${i===this.simultaneous.active?'active':''} ${g.thinking?'thinking':''} ${g.result?'finished':''}">${i+1}</button>`).join('')}</div><div class="game-live-controls sim-nav"><button data-prev-board>← Tablero anterior</button><button data-next-board>Tablero siguiente →</button></div>`:'';
+  const simOverview=sim?`<div class="sim-overview">${this.simultaneous.games.map((game,index)=>`<button data-sim-board="${index}" class="${index===this.simultaneous.active?'active':''}"><b>${game.id}</b><span>${game.result||game.thinking?'Calculando…':game.chess.turn()===game.config.humanColor?'Tu turno':'Turno IA'}</span><small>${this.timeText(game.clock.w)} · ${this.timeText(game.clock.b)}</small></button>`).join('')}</div>`:'';
+  const boardTheme=sim&&this.cfg.separateBoardColors?session.config.boardColor:this.db.settings.boardColor,useCustom=!(sim&&this.cfg.separateBoardColors);
+  v.innerHTML=`<section class="game-layout ${sim?'simultaneous-game':''}"><div><div class="clocks"><span class="${this.chess.turn()==='b'?'active':''}">Negras <b id="clock-b">${this.timeText(this.clock.b)}</b></span><span class="${this.chess.turn()==='w'?'active':''}">Blancas <b id="clock-w">${this.timeText(this.clock.w)}</b></span></div><div class="board-stage"><div class="board-wrap" style="${this.customBoardStyle(boardTheme,useCustom)}">${sim?`<div class="board-id">${session.id}</div>`:''}<div class="board" id="board">${this.boardHtml()}</div>${this.arrowsSvg()}</div>${this.annotationPanel()}</div></div><aside><button data-exit>← Salir</button><small>${mode==='pvp'?'J1 VS J2':mode==='pvc'?`J1 VS ${this.cfg.style.toUpperCase()}`:`${this.cfg.white.toUpperCase()} VS ${this.cfg.black.toUpperCase()}`}</small>${series}<h2>${op?.name||'Posición fuera de libro'}</h2>${simOverview}${simControls}${liveControls}<div class="evalbox"><b>${session?.thinking?'OmegaZero calcula en este tablero…':this.paused?'Pausada':this.thinking?'Calculando…':this.positionText()}</b><span>${this.engineStatus}</span></div>${this.lastMoveQuality?`<div class="move-quality ${this.lastMoveQuality.key}"><b>${this.lastMoveQuality.label}</b><span>${this.lastMoveQuality.detail}</span></div>`:''}<div class="moves">${this.moveList()}</div><div class="actions">${mode==='cvc'?`<button data-flip>↻ Rotar tablero</button>`:''}<button data-fullscreen>⛶ Pantalla completa</button><button data-undo>↶ Deshacer</button><button data-pgn>Copiar PGN</button><button data-save>Guardar</button>${mode==='pvp'?'<button data-draw>½ Ofrecer tablas</button>':''}${this.fideState().claimable&&mode!=='cvc'?'<button data-claim-fide>½ Reclamar tablas FIDE</button>':''}${mode!=='cvc'?'<button data-resign class="danger-inline">Abandonar</button>':''}${mode==='cvc'?'<button data-export-series>Exportar serie PGN</button>':''}<button data-clear>Borrar marcas</button></div><p class="hint">Clic izquierdo o arrastre para mover. Clic derecho marca una casilla; mantén y arrastra con clic derecho para crear una flecha.</p></aside></section>`;
+  this.bindBoard();this.bindAnnotationPanel();this.restoreGameScroll(scrollState);
+  $('[data-exit]').onclick=()=>{if(sim)this.finishAllSimGames('salida');else this.finishGame('salida');this.stopClock();this.analysisReturn=null;this.simultaneous=null;this.screen='home';this.render()};
+  $$('[data-sim-board]').forEach(b=>b.onclick=()=>this.activateSimBoard(Number(b.dataset.simBoard)));$('[data-prev-board]')?.addEventListener('click',()=>this.activateSimBoard(this.simultaneous.active-1));$('[data-next-board]')?.addEventListener('click',()=>this.activateSimBoard(this.simultaneous.active+1));
+  $('[data-pause]')?.addEventListener('click',()=>{this.paused=!this.paused;this.clock.last=performance.now();this.renderGame();if(!this.paused&&mode==='cvc'&&this.cfg.autoPlay)setTimeout(()=>this.comMove(),100)});$('[data-step]')?.addEventListener('click',()=>this.comMove(true));$('[data-flip]')?.addEventListener('click',()=>{this.boardFlipped=!this.boardFlipped;this.renderGame()});$('[data-fullscreen]')?.addEventListener('click',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch{/* El navegador puede bloquear pantalla completa sin gesto compatible. */}});
+  $('[data-undo]').onclick=()=>this.undo();$('[data-pgn]').onclick=()=>navigator.clipboard?.writeText(this.chess.pgn());$('[data-save]').onclick=()=>sim?this.finishSimSession(session,'guardada'):this.finishGame('guardada');$('[data-draw]')?.addEventListener('click',()=>{if(confirm('¿Ambos jugadores aceptan tablas?')){this.finishGame('tablas acordadas','1/2-1/2');this.stopClock();this.renderGame()}});$('[data-claim-fide]')?.addEventListener('click',()=>this.claimFideDraw());$('[data-resign]')?.addEventListener('click',()=>{if(confirm('¿Confirmas el abandono?')){const result=this.chess.turn()==='w'?'0-1':'1-0';this.finishGame('abandono',result);this.stopClock();this.renderGame()}});$('[data-export-series]')?.addEventListener('click',()=>{const pgns=(this.series.games||[]).map((game,index)=>`[Round "${index+1}"]\n${game.pgn}`).join('\n\n');downloadText(`OmegaZero-serie-${Date.now()}.pgn`,pgns||this.chess.pgn(),'application/x-chess-pgn')});$('[data-clear]').onclick=()=>{this.annotations.clear();this.arrows=[];this.syncActiveSimSession();this.renderGame()};
+ }
+ annotationPanel(){return `<div class="annotation-tool ${this.annotation.open?'open':''}"><button class="pencil" data-pencil title="Elegir color de anotación">✎</button>${this.annotation.open?`<div class="annotation-pop"><b>Color de anotación</b><small class="annotation-help">Clic derecho: casilla · Arrastre derecho: flecha</small><div class="color-row">${['red','yellow','green','blue'].map(c=>`<button data-ann-color="${c}" class="swatch ${c} ${this.annotation.color===c?'active':''}" title="${c}"></button>`).join('')}</div></div>`:''}</div>`}
+ rerenderBoardScreen(){if(this.screen==='game')this.renderGame();else if(this.screen==='analysis')this.renderAnalysis();else if(this.screen==='strategy')this.renderStrategy();}
+ toggleAnnotationSquare(sq){this.annotations.get(sq)===this.annotation.color?this.annotations.delete(sq):this.annotations.set(sq,this.annotation.color)}
+ startRightAnnotation(e,sq,context){if(e.button!==2)return;e.preventDefault();e.stopPropagation();e.currentTarget.setPointerCapture?.(e.pointerId);this.rightAnnotation={id:e.pointerId,from:sq,x:e.clientX,y:e.clientY,moved:false,context}}
+ moveRightAnnotation(e){const d=this.rightAnnotation;if(!d||e.pointerId!==d.id)return;if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>7)d.moved=true}
+ endRightAnnotation(e){const d=this.rightAnnotation;if(!d||e.pointerId!==d.id)return;this.rightAnnotation=null;e.preventDefault();e.stopPropagation();const to=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('[data-square]')?.dataset.square||d.from;if(d.moved&&to&&to!==d.from){const ix=this.arrows.findIndex(a=>(a.from||a[0])===d.from&&(a.to||a[1])===to);if(ix>=0&&this.arrows[ix].color===this.annotation.color)this.arrows.splice(ix,1);else{if(ix>=0)this.arrows.splice(ix,1);this.arrows.push({from:d.from,to,color:this.annotation.color})}}else this.toggleAnnotationSquare(d.from);this.suppress=Date.now()+300;this.rerenderBoardScreen()}
+ cancelRightAnnotation(e){if(this.rightAnnotation&&(!e||e.pointerId===this.rightAnnotation.id))this.rightAnnotation=null}
+ bindAnnotationPanel(){$('[data-pencil]')?.addEventListener('click',()=>{this.annotation.open=!this.annotation.open;this.rerenderBoardScreen()});$$('[data-ann-color]').forEach(b=>b.onclick=()=>{this.annotation.color=b.dataset.annColor;this.rerenderBoardScreen()})}
+ bindStaticAnnotationBoard(selector,context){const board=$(selector);if(!board)return;this.bindKeyboardBoard(board);board.oncontextmenu=e=>e.preventDefault();$$('[data-square]',board).forEach(s=>{s.onclick=()=>{if(Date.now()<(this.suppress||0))return;this.annotations.clear();this.arrows=[];this.rerenderBoardScreen()};s.onpointerdown=e=>{if(e.button===2)this.startRightAnnotation(e,s.dataset.square,context)};s.onpointermove=e=>this.moveRightAnnotation(e);s.onpointerup=e=>{if(this.rightAnnotation)this.endRightAnnotation(e)};s.onpointercancel=e=>this.cancelRightAnnotation(e)})}
+ customBoardStyle(themeId=this.db.settings.boardColor,useCustom=true){const t=THEMES[themeId]||THEMES.blue,l=useCustom?this.db.custom.boardLight:null,d=useCustom?this.db.custom.boardDark:null;return `--light:${t.light};--dark:${t.dark};--accent:${t.accent};${l?`--custom-light:url('${l}');`:''}${d?`--custom-dark:url('${d}');`:''}`}
+ bindKeyboardBoard(board){if(!board)return;board.setAttribute('role','grid');const squares=$$('[data-square]',board);if(!squares.some(square=>square.tabIndex===0)&&squares[0])squares[0].tabIndex=0;board.addEventListener('keydown',event=>{const current=event.target.closest('[data-square]');if(!current)return;const index=squares.indexOf(current),columns=8;let next=index;if(event.key==='ArrowRight')next=index+1;if(event.key==='ArrowLeft')next=index-1;if(event.key==='ArrowDown')next=index+columns;if(event.key==='ArrowUp')next=index-columns;if(['ArrowRight','ArrowLeft','ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();next=(next+squares.length)%squares.length;squares.forEach(square=>square.tabIndex=-1);squares[next].tabIndex=0;squares[next].focus()}if(event.key==='Enter'||event.key===' '){event.preventDefault();current.click()}})}
+ bindBoard(){const board=$('#board');this.bindKeyboardBoard(board);board.oncontextmenu=e=>e.preventDefault();$$('[data-square]',board).forEach(s=>{s.onclick=()=>{if(Date.now()<(this.suppress||0))return;this.leftSquare(s.dataset.square)};s.onpointerdown=e=>e.button===2?this.startRightAnnotation(e,s.dataset.square,'game'):this.startVisualDrag(e,s.dataset.square,'game');s.onpointermove=e=>{this.dragMove(e);this.moveRightAnnotation(e)};s.onpointerup=e=>this.rightAnnotation?this.endRightAnnotation(e):this.endVisualDrag(e,(from,to)=>this.playMove(from,to));s.onpointercancel=e=>{this.cancelRightAnnotation(e);this.endVisualDrag(e,(from,to)=>this.playMove(from,to))}});}
+ leftSquare(sq){this.annotations.clear();this.arrows=[];const p=this.chess.get(sq);if(this.isHumanTurn()&&this.selected&&this.legal.includes(sq)){this.playMove(this.selected,sq);return}if(this.isHumanTurn()&&p?.color===this.chess.turn()){this.selected=sq;this.legal=this.chess.moves({square:sq,verbose:true}).map(m=>m.to);this.renderGame()}else{this.selected=null;this.legal=[];this.renderGame()}}
+ dragStart(e,sq){this.startVisualDrag(e,sq,'game')}
+ startVisualDrag(e,sq,context,chess=this.chess){if(e.button!==0)return;if(context==='game'&&!this.isHumanTurn())return;if(context==='tcom'&&!this.tcomBoardInteractive())return;const p=chess.get(sq);if(!p||p.color!==chess.turn())return;e.preventDefault();this.annotations.clear();this.arrows=[];const source=e.currentTarget,rect=source.getBoundingClientRect(),img=source.querySelector('img'),ghost=img?.cloneNode();if(ghost){ghost.className='drag-ghost';ghost.style.width=`${rect.width*.88}px`;ghost.style.height=`${rect.height*.88}px`;document.body.appendChild(ghost);source.classList.add('drag-source')}source.setPointerCapture?.(e.pointerId);this.drag={id:e.pointerId,from:sq,x:e.clientX,y:e.clientY,moved:false,context,chess,ghost,source};this.dragMove(e)}
+ dragMove(e){if(!this.drag||e.pointerId!==this.drag.id)return;const d=this.drag;if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>5)d.moved=true;if(d.ghost){d.ghost.style.left=`${e.clientX}px`;d.ghost.style.top=`${e.clientY}px`}}
+ endVisualDrag(e,onMove){if(!this.drag||e.pointerId!==this.drag.id)return;const d=this.drag;this.drag=null;d.ghost?.remove();d.source?.classList.remove('drag-source');if(!d.moved)return;const to=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('[data-square]')?.dataset.square,chess=d.chess||this.chess;if(to&&chess.moves({square:d.from,verbose:true}).some(m=>m.to===to)){this.suppress=Date.now()+250;onMove(d.from,to)}}
+ dragEnd(e){this.endVisualDrag(e,(from,to)=>this.playMove(from,to))}
+ isHumanTurn(){if(this.isSimultaneous()){const s=this.activeSimSession();return Boolean(s&&!s.thinking&&!s.result&&s.chess.turn()===s.config.humanColor)}if(this.thinking)return false;if(this.cfg.mode==='pvp')return true;if(this.cfg.mode==='cvc')return false;return this.chess.turn()===this.cfg.humanColor}
+ async playMove(from,to){let promotion='q';const options=this.chess.moves({square:from,verbose:true}).filter(move=>move.to===to);if(options.some(move=>move.promotion))promotion=await this.choosePromotion();let move;try{move=this.chess.move({from,to,promotion})}catch{return}if(move)this.afterMove(move)}
+ async choosePromotion(){return new Promise(resolve=>{const modal=document.createElement('div');modal.className='modal promotion-modal';modal.innerHTML=`<div class="dialog promotion-dialog"><h2>Promocionar peón</h2><div>${[['q','Dama'],['r','Torre'],['b','Alfil'],['n','Caballo']].map(([piece,label])=>`<button data-promotion="${piece}">${label}</button>`).join('')}</div></div>`;document.body.appendChild(modal);$$('[data-promotion]',modal).forEach(button=>button.onclick=()=>{const piece=button.dataset.promotion;modal.remove();resolve(piece)})})}
+ afterMove(m){
+  this.lastMove=[m.from,m.to];playTone(this.chess.inCheck()?'check':m.captured?'capture':'move',this.soundOptions());announce(`${m.san}. ${this.positionText()}`);this.selected=null;this.legal=[];this.positions.push({fen:this.chess.fen(),ply:this.chess.history().length});if(this.cfg.clock){this.clock[m.color]+=this.cfg.increment;this.clock.last=performance.now()}
+  if(this.isSimultaneous()){const s=this.activeSimSession();this.syncActiveSimSession();const fide=this.fideState();if(fide.terminal){s.result=fide.reason;this.finishSimSession(s,fide.reason);this.renderGame();return}if(fide.claimable){s.result='tablas reclamadas por OmegaZero';this.finishSimSession(s,s.result);this.renderGame();return}const index=this.simultaneous.active;this.enqueueSimReply(index);this.nextSimBoard();return}
+  this.renderGame();const fide=this.fideState();if(fide.terminal){this.handleGameEnd();return}if(fide.claimable&&(this.cfg.mode==='cvc'||(this.cfg.mode==='pvc'&&this.chess.turn()!==this.cfg.humanColor))){this.finishGame(`tablas reclamadas: ${fide.claims.join(' y ')}`,'1/2-1/2');this.stopClock();this.renderGame();return}if(this.cfg.mode==='pvc'&&this.chess.turn()!==this.cfg.humanColor)setTimeout(()=>this.comMove(),180);if(this.cfg.mode==='cvc'&&this.cfg.autoPlay&&!this.paused)setTimeout(()=>this.comMove(),220);
+ }
+ handleGameEnd(){this.finishGame('finalizada');playTone('end',this.soundOptions());if(this.cfg.mode==='cvc'&&this.series.current<this.series.total){setTimeout(()=>{this.stopClock();this.series.current++;if(this.cfg.alternateColors){[this.cfg.white,this.cfg.black]=[this.cfg.black,this.cfg.white];if(this.cfg.independentOpenings)[this.cfg.whiteOpening,this.cfg.blackOpening]=[this.cfg.blackOpening,this.cfg.whiteOpening]}this.resetGamePosition();this.renderGame();this.startClock();if(this.cfg.autoPlay)setTimeout(()=>this.comMove(),350)},900)}}
+ async comMove(force=false){if(this.isSimultaneous())return;if(this.cfg.mode==='pvc'&&this.chess.turn()===this.cfg.humanColor)return;if((this.paused&&!force)||this.thinking||this.fideState().terminal)return;this.thinking=true;this.renderGame();const color=this.chess.turn(),style=this.cfg.mode==='cvc'?(color==='w'?this.cfg.white:this.cfg.black):this.cfg.style;try{let chosen=null,openingId=this.cfg.opening;if(this.cfg.mode==='cvc'&&this.cfg.independentOpenings)openingId=color==='w'?this.cfg.whiteOpening:this.cfg.blackOpening;const op=getOpening(openingId),bookSan=nextOpeningSan(openingId,this.chess.history(),this.chess.fen());if(op&&bookSan){const legal=this.chess.moves({verbose:true}).find(move=>move.san.replace(/[+#]/g,'')===bookSan.replace(/[+#]/g,''));if(legal)chosen={uci:legal.from+legal.to+(legal.promotion||''),book:true}}const before=this.chess.fen();let cand=[];if(!chosen||this.cfg.multiPv>1)cand=await this.engine.analyse(before,{depth:this.cfg.depth,multiPv:Math.max(3,this.cfg.multiPv),skill:this.cfg.skill});if(!chosen){chosen=chooseBotCandidate(this.chess,cand,style,resolveBotScheme(style,color),color,{},style)||cand[0];chosen=this.applyDiversity(chosen,cand,color)}const m=this.chess.move(uciToMove(chosen.uci));this.thinking=false;if(m){this.lastMoveQuality=this.classifyEngineChoice(chosen,cand,m);this.afterMove(m)}}catch{this.thinking=false;this.renderGame()}}
+ applyDiversity(preferred,candidates,color){if(!preferred||!candidates?.length||this.cfg.diversity<=0||Math.random()>this.cfg.diversity/100)return preferred;const sign=color==='w'?1:-1,best=Number(candidates[0]?.score||0);const viable=candidates.filter(candidate=>Math.max(0,(best-Number(candidate.score||0))*sign)<=45).slice(0,3);if(viable.length<2)return preferred;const alternatives=viable.filter(candidate=>candidate.uci!==preferred.uci);return alternatives[Math.floor(Math.random()*alternatives.length)]||preferred}
+ undo(){if(this.isSimultaneous()){const s=this.activeSimSession();if(s.thinking)return alert('Espera a que OmegaZero responda en este tablero.');this.chess.undo();if(this.chess.turn()!==s.config.humanColor)this.chess.undo();this.positions=this.positions.slice(0,this.chess.history().length+1);this.lastMove=null;s.result=null;s.gameSaved=false;this.syncActiveSimSession();this.renderGame();return}if(this.thinking)return;this.chess.undo();if(this.cfg.mode==='pvc')this.chess.undo();this.positions=this.positions.slice(0,this.chess.history().length+1);this.lastMove=null;this.renderGame()}
+ finishGame(reason,forcedResult=null){if(this.isSimultaneous()){this.finishSimSession(this.activeSimSession(),reason);return}if(this.gameSaved||this.chess.history().length<2)return;const opening=identifyOpening(this.chess.history(),this.chess.fen()),result=forcedResult||this.currentResult(reason),engineName=this.cfg.style==='omega'?'Omega':'Zero';const game={id:crypto.randomUUID?.()||String(Date.now()),date:new Date().toISOString(),mode:this.cfg.mode,white:this.cfg.mode==='cvc'?this.cfg.white:(this.cfg.mode==='pvc'?(this.cfg.humanColor==='w'?'J1':engineName):'J1'),black:this.cfg.mode==='cvc'?this.cfg.black:(this.cfg.mode==='pvc'?(this.cfg.humanColor==='b'?'J1':engineName):'J2'),result,pgn:this.chess.pgn(),fen:this.chess.fen(),reason,openingId:opening?.id||null,openingName:opening?.name||'Fuera de libro',positions:this.positions,...(this.cfg.mode==='pvc'?{humanColor:this.cfg.humanColor,engineStyle:this.cfg.style,engineSkill:Number(this.cfg.skill),engineElo:this.eloForSkill(this.cfg.skill),engineDepth:Number(this.cfg.depth),engineMultiPv:Number(this.cfg.multiPv)}:{})};addGame(this.db,game);addProblemsFromGame(this.db,game);if(this.cfg.mode==='cvc')this.series.games.push(game);this.gameSaved=true}
+ fideState(chess=this.chess,positions=this.positions){return fideGameState(chess,positions)}
+ claimFideDraw(){const state=this.fideState();if(!state.claimable)return alert('La posición todavía no permite una reclamación FIDE de tablas.');const reason=`tablas reclamadas: ${state.claims.join(' y ')}`;this.finishGame(reason,'1/2-1/2');this.stopClock();this.renderGame()}
+ currentResult(reason=''){const state=this.fideState();if(reason.includes('tablas')||state.result==='1/2-1/2')return '1/2-1/2';if(reason==='tiempo')return timeoutResult(this.chess,this.chess.turn());if(state.terminal)return state.result;return '*'}
+ moveList(){const h=this.chess.history();let s='';for(let i=0;i<h.length;i+=2)s+=`<div><b>${i/2+1}.</b><span>${h[i]||''}</span><span>${h[i+1]||''}</span></div>`;return s||'<p>La partida todavía no tiene jugadas.</p>'}
+ positionText(){const state=this.fideState();if(state.terminal)return state.result==='1/2-1/2'?`Tablas FIDE por ${state.reason}`:'Jaque mate';if(state.claimable)return `${this.chess.turn()==='w'?'Juegan blancas':'Juegan negras'} · tablas reclamables por ${state.claims.join(' o ')}`;if(this.chess.inCheck())return 'Jaque';return this.chess.turn()==='w'?'Juegan blancas':'Juegan negras'}
+ timeText(s){s=Math.max(0,Math.ceil(s));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`}
+ startClock(){this.stopClock();if(!this.cfg.clock)return;if(this.isSimultaneous()){const timer=setInterval(()=>{if(this.screen!=='game'||this.paused)return;const now=performance.now(),sessions=this.cfg.independentSimClocks?this.simultaneous.games:[this.activeSimSession()].filter(Boolean);for(const s of sessions){if(s.result||fideGameState(s.chess,s.positions).terminal)continue;const dt=Math.max(0,(now-s.clock.last)/1000);s.clock.last=now;const side=s.chess.turn();s.clock[side]=Math.max(0,s.clock[side]-dt);if(s.clock[side]<=0){s.result='tiempo';this.finishSimSession(s,'tiempo')}}if(!this.cfg.independentSimClocks)this.simultaneous.games.forEach(s=>{if(!sessions.includes(s))s.clock.last=now});const active=this.activeSimSession();if(active){const w=$('#clock-w'),b=$('#clock-b');if(w)w.textContent=this.timeText(active.clock.w);if(b)b.textContent=this.timeText(active.clock.b)}},200);this.simultaneous.timer=timer;this.clock.timer=timer;return}this.clock.last=performance.now();this.clock.timer=setInterval(()=>{if(this.screen!=='game'||this.paused||this.fideState().terminal)return;const now=performance.now(),dt=(now-this.clock.last)/1000;this.clock.last=now;const side=this.chess.turn();this.clock[side]=Math.max(0,this.clock[side]-dt);const w=$('#clock-w'),b=$('#clock-b');if(w)w.textContent=this.timeText(this.clock.w);if(b)b.textContent=this.timeText(this.clock.b);if(this.clock[side]<=0){this.finishGame('tiempo',timeoutResult(this.chess,side));this.stopClock();this.renderGame()}},200)}
+ stopClock(){if(this.clock?.timer)clearInterval(this.clock.timer);if(this.simultaneous?.timer)clearInterval(this.simultaneous.timer);if(this.clock)this.clock.timer=null;if(this.simultaneous)this.simultaneous.timer=null}
+ arrowsSvg(){if(!this.arrows.length)return'';const xy=s=>{const f=this.boardFlipped?7-(s.charCodeAt(0)-97):s.charCodeAt(0)-97,r=this.boardFlipped?Number(s[1])-1:8-Number(s[1]);return [f*100+50,r*100+50]};return `<svg class="arrows" viewBox="0 0 800 800">${this.arrows.map(a=>{const [x1,y1]=xy(a.from||a[0]),[x2,y2]=xy(a.to||a[1]),c=a.color||'yellow',dx=x2-x1,dy=y2-y1,len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len,uy=dy/len,baseX=x2-42*ux,baseY=y2-42*uy,px=-uy,py=ux,leftX=baseX+25*px,leftY=baseY+25*py,rightX=baseX-25*px,rightY=baseY-25*py,shaftX=baseX-3*ux,shaftY=baseY-3*uy;return `<line class="stroke-${c}" x1="${x1}" y1="${y1}" x2="${shaftX}" y2="${shaftY}"/><polygon class="fill-${c}" points="${x2},${y2} ${leftX},${leftY} ${rightX},${rightY}"/>`}).join('')}</svg>`}
+ classifyEngineChoice(chosen,candidates,move){if(chosen.book)return {key:'book',label:'Jugada de libro',detail:`${move.san} sigue el repertorio configurado.`};const best=candidates?.[0];if(!best||chosen.score==null)return {key:'good',label:'Buena',detail:`${move.san} mantiene el plan de ${move.color==='w'?'blancas':'negras'}.`};const loss=Math.max(0,Math.abs((best.score||0)-(chosen.score||0)));if(chosen.mate)return {key:'best',label:'Mate encontrado',detail:`${move.san} conduce a una secuencia forzada.`};if(loss<=8&&move.captured&&move.piece!=='p')return {key:'brilliant',label:'Brillante',detail:`${move.san} combina precisión máxima con una decisión activa.`};if(loss<=12)return {key:'best',label:'Mejor jugada',detail:`${move.san} coincide prácticamente con la primera elección del motor.`};if(loss<=30)return {key:'excellent',label:'Excelente',detail:`${move.san} conserva casi toda la evaluación.`};if(loss<=70)return {key:'good',label:'Buena',detail:`${move.san} es sólida, aunque existe una alternativa más precisa.`};if(loss<=130)return {key:'inaccuracy',label:'Imprecisión',detail:`${move.san} cede parte de la ventaja o del equilibrio.`};if(loss<=260)return {key:'mistake',label:'Error',detail:`${move.san} produce una pérdida importante de evaluación.`};return {key:'blunder',label:'Grave error',detail:`${move.san} cambia de forma decisiva la valoración de la posición.`};}
+ classifyCandidate(c,best,i){if(c.mate)return i===0?'Mate': 'Alternativa de mate';const loss=Math.max(0,Math.abs((best?.score||0)-(c.score||0)));if(i===0)return 'Mejor jugada';if(loss<=10)return 'Excelente';if(loss<=35)return 'Buena';if(loss<=80)return 'Imprecisión leve';if(loss<=160)return 'Error';return 'Grave error';}
+ scheduleAnalysis(delay=120){clearTimeout(this.analysisTimer);if(this.analysisEdit.enabled)return;this.analysisTimer=setTimeout(()=>{if(this.screen==='analysis')this.runAnalysis(true)},delay)}
+ ensureAnalysisTimeline(force=false){
+  if(this.analysisTimeline.length&&!force)return;
+  const history=this.chess.history({verbose:true});
+  if(history.length){this.analysisTimeline=[{fen:history[0].before,san:null,ply:0},...history.map((move,index)=>({fen:move.after,san:move.san,ply:index+1}))]}
+  else this.analysisTimeline=[{fen:this.chess.fen(),san:null,ply:0}];
+  this.analysisIndex=this.analysisTimeline.length-1;
+ }
+ loadAnalysisIndex(index){this.ensureAnalysisTimeline();this.analysisIndex=clamp(index,0,this.analysisTimeline.length-1);this.chess.load(this.analysisTimeline[this.analysisIndex].fen);this.analysis=null;this.analysisMoveQuality=null;this.selected=null;this.legal=[];this.renderAnalysis();this.scheduleAnalysis(20)}
+ currentAnalysisComment(){return this.analysisComments[this.chess.fen().split(' ').slice(0,4).join(' ')]||''}
+ saveAnalysisComment(value){const key=this.chess.fen().split(' ').slice(0,4).join(' ');this.analysisComments[key]=value;const existing=this.db.analysis.find(item=>item.id===key);if(existing){existing.comment=value;existing.updatedAt=Date.now()}else this.db.analysis.push({id:key,fen:this.chess.fen(),comment:value,updatedAt:Date.now()});saveDb(this.db)}
+ analysisMoveListHtml(){
+  this.ensureAnalysisTimeline();
+  const rows=[];
+  for(let ply=1;ply<this.analysisTimeline.length;ply+=2){
+   const white=this.analysisTimeline[ply],black=this.analysisTimeline[ply+1],moveNumber=Math.ceil(ply/2);
+   rows.push(`<div class="analysis-move-row"><span>${moveNumber}.</span><button data-analysis-ply="${ply}" class="${this.analysisIndex===ply?'active':''}" ${white?'':'disabled'}>${white?.san||'—'}</button><button data-analysis-ply="${ply+1}" class="${this.analysisIndex===ply+1?'active':''}" ${black?'':'disabled'}>${black?.san||'—'}</button></div>`);
+  }
+  return rows.join('')||'<p class="empty-moves">Realiza una jugada o importa un PGN para comenzar.</p>';
+ }
+ analysisEvalRailHtml(){
+  const candidate=this.analysis?.[0],score=Number(candidate?.score||0),whiteShare=clamp(50+score/20,4,96);
+  return `<div class="analysis-eval-rail" aria-label="Evaluación ${candidate?scoreText(candidate):'calculando'}"><div class="eval-black"></div><div class="eval-white" style="height:${whiteShare}%"></div><strong>${candidate?scoreText(candidate):'…'}</strong></div>`;
+ }
+ renderAnalysis(){
+  this.ensureAnalysisTimeline();
+  for(const item of this.db.analysis||[])if(item.comment&&!this.analysisComments[item.id])this.analysisComments[item.id]=item.comment;
+  const v=$('#view'),fromStrategy=this.analysisReturn==='strategy',wdl=estimateWdl(this.analysis?.[0]?.score||0),opening=identifyOpening([],this.chess.fen()),current=this.analysisTimeline[this.analysisIndex];
+  const editor=this.analysisEdit.enabled?`<section class="position-editor"><h3>Editor de posición</h3><div class="editor-pieces">${['wK','wQ','wR','wB','wN','wP','bK','bQ','bR','bB','bN','bP','empty'].map(piece=>`<button data-editor-piece="${piece}" class="${this.analysisEdit.piece===piece?'active':''}">${piece==='empty'?'Vacío':piece}</button>`).join('')}</div><div class="row"><button data-editor-turn="w">Juegan blancas</button><button data-editor-turn="b">Juegan negras</button><button data-editor-clear>Vaciar tablero</button></div><small>Selecciona una pieza y toca una casilla. El análisis se reanudará al cerrar el editor.</small></section>`:'';
+  const quality=this.analysisMoveQuality?`<div class="analysis-played-card ${this.analysisMoveQuality.key||''}"><span>JUGADA REALIZADA</span><div><b>${this.analysisMoveQuality.san}</b><strong>${this.analysisMoveQuality.label}</strong></div><p>${this.analysisMoveQuality.detail||'Stockfish está comparando la jugada.'}</p></div>`:'';
+  v.innerHTML=`<section class="page-head analysis-page-head"><button data-back aria-label="Volver">←</button><div><small>ENTRENAR · ${opening?.name||'Posición libre'}</small><h1>Tablero de análisis</h1></div>${fromStrategy?'<button id="returnStrategy" class="return-strategy">← VOLVER A ESTRATEGIA</button>':'<div class="live-badge">● ANÁLISIS EN TIEMPO REAL</div>'}</section>
+  <section class="analysis-workspace">
+   <div class="analysis-board-column">
+    <div class="analysis-board-shell">${this.analysisEvalRailHtml()}<div class="board-wrap" style="${this.customBoardStyle()}"><div class="board" id="analysis-board">${this.boardHtml(this.chess,true)}</div>${this.arrowsSvg()}</div></div>
+    <div class="analysis-board-actions"><button data-analysis-first title="Ir al inicio">|←</button><button data-analysis-prev ${this.analysisIndex<=0?'disabled':''} title="Jugada anterior">←</button><button data-analysis-next ${this.analysisIndex>=this.analysisTimeline.length-1?'disabled':''} title="Jugada siguiente">→</button><button data-analysis-last title="Ir al final">→|</button><span>${current?.san?`Después de <b>${current.san}</b>`:'Posición inicial'}</span></div>
+    ${this.annotationPanel()}${editor}
+   </div>
+   <aside class="analysis-console">
+    <header class="analysis-console-head"><div><small>STOCKFISH 18</small><h2>${this.analysis?.[0]?scoreText(this.analysis[0]):'Calculando…'}</h2></div><div><span>Prof. ${this.analysis?.[0]?.depth||this.cfg.depth}</span><span>${this.cfg.multiPv} variante${this.cfg.multiPv===1?'':'s'}</span></div></header>
+    ${quality}
+    <section class="analysis-candidates"><header><h3>Mejores continuaciones</h3><span>${this.analysisBusy?'Actualizando…':'En tiempo real'}</span></header><div id="analysis-results">${this.analysisHtml()}</div></section>
+    <section class="analysis-moves-card"><header><h3>Jugadas</h3><span>${Math.floor((this.analysisTimeline.length-1)/2)} completas</span></header><div class="analysis-moves-list">${this.analysisMoveListHtml()}</div></section>
+    <section class="analysis-wdl"><span><b>${(wdl.white*100).toFixed(0)}%</b> Blancas</span><span><b>${(wdl.draw*100).toFixed(0)}%</b> Tablas</span><span><b>${(wdl.black*100).toFixed(0)}%</b> Negras</span></section>
+    <details class="analysis-tools"><summary>Herramientas y configuración</summary><label>FEN<input id="fen" value="${esc(this.chess.fen())}"></label><div class="row"><button id="loadFen">Cargar FEN</button><button id="resetFen">Inicial</button><button id="importPgn">Importar PGN</button><button id="toggleEditor">${this.analysisEdit.enabled?'Cerrar editor':'Editar posición'}</button></div><div class="analysis-settings"><label>Profundidad<input id="adepth" type="number" min="1" max="64" value="${this.cfg.depth}"></label><label>Variantes<input id="apv" type="number" min="1" max="8" value="${this.cfg.multiPv}"></label></div><label>Comentario de la posición<textarea id="analysisComment" rows="3" placeholder="Escribe tu idea, plan o duda…">${esc(this.currentAnalysisComment())}</textarea></label></details>
+   </aside>
+  </section>`;
+  const leave=()=>{clearTimeout(this.analysisTimer);if(this.analysisReturn==='strategy'){this.analysisReturn=null;this.screen='strategy'}else this.screen='home';this.render()};
+  $('[data-back]').onclick=leave;$('#returnStrategy')?.addEventListener('click',leave);
+  $('[data-analysis-first]')?.addEventListener('click',()=>this.loadAnalysisIndex(0));$('[data-analysis-last]')?.addEventListener('click',()=>this.loadAnalysisIndex(this.analysisTimeline.length-1));
+  $('[data-analysis-prev]')?.addEventListener('click',()=>this.loadAnalysisIndex(this.analysisIndex-1));$('[data-analysis-next]')?.addEventListener('click',()=>this.loadAnalysisIndex(this.analysisIndex+1));$$('[data-analysis-ply]').forEach(button=>button.onclick=()=>this.loadAnalysisIndex(Number(button.dataset.analysisPly)));
+  $('#loadFen').onclick=()=>{try{this.chess.load($('#fen').value);this.analysisTimeline=[];this.ensureAnalysisTimeline(true);this.selected=null;this.analysis=null;this.analysisMoveQuality=null;this.render();this.scheduleAnalysis()}catch{alert('FEN inválido')}};
+  $('#resetFen').onclick=()=>{this.chess.reset();this.analysisTimeline=[];this.ensureAnalysisTimeline(true);this.analysis=null;this.analysisMoveQuality=null;this.render();this.scheduleAnalysis()};
+  $('#importPgn').onclick=()=>{const pgn=prompt('Pega el PGN:');if(pgn){try{this.chess.loadPgn(pgn);this.analysisTimeline=[];this.ensureAnalysisTimeline(true);this.analysis=null;this.analysisMoveQuality=null;this.render();this.scheduleAnalysis()}catch{alert('PGN inválido')}}};
+  $('#toggleEditor').onclick=()=>{this.analysisEdit.enabled=!this.analysisEdit.enabled;this.analysis=null;this.renderAnalysis();if(!this.analysisEdit.enabled)this.scheduleAnalysis(20)};
+  $('#adepth').onchange=event=>{this.cfg.depth=clamp(event.target.value,1,64);this.db.settings.analysisDepth=this.cfg.depth;saveDb(this.db);this.scheduleAnalysis()};$('#apv').onchange=event=>{this.cfg.multiPv=clamp(event.target.value,1,8);this.scheduleAnalysis()};$('#analysisComment').onchange=event=>this.saveAnalysisComment(event.target.value);
+  $$('[data-copy-variation]').forEach(button=>button.onclick=()=>navigator.clipboard?.writeText(button.dataset.copyVariation));
+  $$('[data-editor-piece]').forEach(button=>button.onclick=()=>{this.analysisEdit.piece=button.dataset.editorPiece;this.renderAnalysis()});$$('[data-editor-turn]').forEach(button=>button.onclick=()=>this.setAnalysisTurn(button.dataset.editorTurn));$('[data-editor-clear]')?.addEventListener('click',()=>{this.chess.clear();this.analysisTimeline=[];this.renderAnalysis()});
+  this.bindAnalysisBoard();this.bindAnnotationPanel();if(!this.analysis&&!this.analysisBusy&&!this.analysisEdit.enabled)this.scheduleAnalysis(30);
+ }
+ setAnalysisTurn(turn){const parts=this.chess.fen().split(' ');parts[1]=turn;try{this.chess.load(parts.join(' '),{skipValidation:true})}catch{/* El editor puede estar temporalmente incompleto. */}this.analysisTimeline=[];this.renderAnalysis()}
+ editAnalysisSquare(square){const code=this.analysisEdit.piece;if(code==='empty')this.chess.remove(square);else this.chess.put({color:code[0],type:code[1].toLowerCase()},square);this.analysisTimeline=[];this.analysis=null;this.renderAnalysis()}
+ bindAnalysisBoard(){
+  const board=$('#analysis-board');this.bindKeyboardBoard(board);if(this.analysisEdit.enabled){$$('[data-square]',board).forEach(square=>{square.onclick=()=>this.editAnalysisSquare(square.dataset.square);square.oncontextmenu=event=>event.preventDefault()});return}
+  const move=async(from,to)=>{const verbose=this.chess.moves({square:from,verbose:true}).find(item=>item.to===to);if(!verbose)return;clearTimeout(this.analysisTimer);const beforeFen=this.chess.fen(),best=this.analysis?.[0]||null,uci=from+to+(verbose.promotion||'');let promotion='q';if(verbose.promotion)promotion=await this.choosePromotion();const playedMove=this.chess.move({from,to,promotion});this.lastMove=[from,to];this.analysisTimeline=this.analysisTimeline.slice(0,this.analysisIndex+1);this.analysisTimeline.push({fen:this.chess.fen(),san:playedMove.san,ply:this.analysisTimeline.length});this.analysisIndex=this.analysisTimeline.length-1;this.selected=null;this.legal=[];this.analysis=null;this.analysisBusy=true;this.analysisMoveQuality={san:playedMove.san,key:'pending',label:'Evaluando…',detail:'Stockfish compara la jugada realizada con la mejor candidata.'};this.renderAnalysis();try{const all=best?[best,...(this.analysis||[])]:await this.engine.analyse(beforeFen,{depth:this.cfg.depth,multiPv:Math.max(3,this.cfg.multiPv),skill:20});const baseline=best||all[0];const played=(await this.engine.analyse(beforeFen,{depth:this.cfg.depth,multiPv:1,searchMoves:[uci],skill:20}))[0];this.analysisMoveQuality=this.classifyPlayedAnalysisMove(playedMove,baseline,played,all)}catch{this.analysisMoveQuality={san:playedMove.san,key:'unknown',label:'Sin clasificación',detail:'No se pudo completar la comparación.'}}finally{this.analysisBusy=false;this.renderAnalysis();this.scheduleAnalysis(20)}};
+  $$('[data-square]',board).forEach(square=>{square.onclick=()=>{if(Date.now()<(this.suppress||0))return;this.annotations.clear();this.arrows=[];const sq=square.dataset.square;if(this.selected&&this.legal.includes(sq)){move(this.selected,sq)}else{const piece=this.chess.get(sq);if(piece?.color===this.chess.turn()){this.selected=sq;this.legal=this.chess.moves({square:sq,verbose:true}).map(item=>item.to);this.renderAnalysis()}else{this.selected=null;this.legal=[];this.renderAnalysis()}}};square.oncontextmenu=event=>event.preventDefault();square.onpointerdown=event=>event.button===2?this.startRightAnnotation(event,square.dataset.square,'analysis'):this.startVisualDrag(event,square.dataset.square,'analysis');square.onpointermove=event=>{this.dragMove(event);this.moveRightAnnotation(event)};square.onpointerup=event=>this.rightAnnotation?this.endRightAnnotation(event):this.endVisualDrag(event,move);square.onpointercancel=event=>{this.cancelRightAnnotation(event);this.endVisualDrag(event,move)}});
+ }
+ classifyPlayedAnalysisMove(move,best,played,alternatives=[]){const san=move.san;if(!best||!played)return{san,key:'unknown',label:'Sin clasificación',detail:'No había una evaluación previa completa.'};const quality=classifyMoveQuality({bestScore:best.score,playedScore:played.score,mover:move.color,move,alternatives,isMate:Boolean(played.mate)});return{san,...quality,detail:`Pérdida frente a la mejor candidata: ${(quality.lossCp/100).toFixed(2)}. Evaluación de la jugada: ${scoreText(played)}.`}}
+ async runAnalysis(silent=false){if(this.analysisBusy||this.analysisEdit.enabled)return;this.analysisBusy=true;const target=$('#analysis-results');if(target&&!silent)target.innerHTML='<p>Calculando mejores jugadas…</p>';try{const candidates=await this.engine.analyse(this.chess.fen(),{depth:this.cfg.depth,multiPv:this.cfg.multiPv,skill:20});this.analysis=candidates.map((candidate,index)=>{const test=new Chess(this.chess.fen());const move=test.move(uciToMove(candidate.uci));return {...candidate,san:move?.san||candidate.uci,rank:index+1,forcing:move?.san?.includes('+')?'Jaque':move?.captured?'Captura':'Plan'}})}catch(error){if(target)target.innerHTML=`<p>${esc(error.message)}</p>`}finally{this.analysisBusy=false;if(this.screen==='analysis')this.render()}}
+ analysisHtml(){
+  if(this.analysisBusy&&!this.analysis)return '<div class="analysis-loading"><i></i><span>Stockfish está calculando…</span></div>';
+  if(!this.analysis)return '<p class="analysis-empty">El análisis comenzará automáticamente.</p>';
+  return this.analysis.map((candidate,index)=>{
+   const variation=(candidate.variation||[]).slice(0,14).join(' '),quality=this.classifyCandidate(candidate,this.analysis[0],index);
+   return `<article class="candidate-line rank-${index+1}"><div class="candidate-main"><span class="candidate-rank">${index+1}</span><div><b>${candidate.san}</b><small>${quality}</small></div><strong>${scoreText(candidate)}</strong></div><code>${variation||'Sin variante disponible'}</code><footer><span>Profundidad ${candidate.depth}</span><button data-copy-variation="${esc(variation)}">Copiar línea</button></footer></article>`;
+  }).join('');
+ }
+ masterProblemsWithProgress(){
+  const progress=this.db.settings.masterStrategyProgress||{};
+  return MASTER_PROBLEMS.map(problem=>{const game=MASTER_GAMES.find(item=>item.id===problem.masterGameId);return {...problem,masterTitle:this.masterGameTitle(game),masterWhite:game?.white,masterBlack:game?.black,...(progress[problem.id]||{})}});
+ }
+ strategySourceProblems(){return this.strategySource==='master'?this.masterProblemsWithProgress():this.db.problems}
+ renderStrategy(){
+  const v=$('#view');
+  if(!this.strategySource){
+   v.innerHTML=`<section class="page-head"><button data-back>←</button><div><small>ENTRENAR</small><h1>Estrategia</h1></div></section><section class="strategy-source-grid"><button data-strategy-source="own" class="panel strategy-source-card"><small>HISTORIAL PERSONAL</small><h2>Partidas propias</h2><p>Entrena con posiciones no duplicadas obtenidas desde la jugada 7 de J1 vs J2, J1 vs COM y COM vs COM.</p><strong>${this.db.problems.length} posiciones</strong></button><button data-strategy-source="master" class="panel strategy-source-card"><small>BASE MAGISTRAL</small><h2>Partidas magistrales</h2><p>Decisiones reales tomadas de partidas históricas de maestros, con el mismo sistema flexible de tres candidatas.</p><strong>${MASTER_PROBLEMS.length} posiciones · ${MASTER_GAMES.length} partidas</strong></button></section>`;
+   $('[data-back]').onclick=()=>{this.screen='home';this.render()};
+   $$('[data-strategy-source]').forEach(button=>button.onclick=()=>{this.strategySource=button.dataset.strategySource;this.db.settings.strategySource=this.strategySource;saveDb(this.db);this.render()});
+   return;
+  }
+  const sourceProblems=this.strategySourceProblems(),stats=buildTrainingStats(sourceProblems);
+  if(!this.strategy.problem){
+   const openingNames=[...new Set(sourceProblems.map(problem=>problem.openingName).filter(Boolean))].sort();
+   v.innerHTML=`<section class="page-head"><button data-back>←</button><div><small>ENTRENAR</small><h1>Estrategia · ${this.strategySource==='master'?'Partidas magistrales':'Partidas propias'}</h1></div></section><section class="strategy-dashboard"><div class="strategy-intro panel"><h2>Decisiones reales, no rompecabezas rígidos</h2><p>Cualquier posición no duplicada desde el movimiento 7 puede aparecer. Se mantiene una separación mínima de siete jugadas completas entre ejercicios extraídos de una misma partida.</p><div class="strategy-form"><label>Movimientos correctos<select id="len">${[1,2,3,4,5,6,7].map(number=>`<option value="${number}" ${number==this.db.settings.strategyLength?'selected':''}>${number}</option>`).join('')}</select></label><label>Ejercicios por sesión<input id="sessionSize" type="number" min="1" max="50" value="${this.db.settings.strategySessionSize||10}"></label><label>Dificultad<select id="strategyDifficulty"><option value="easy">Fácil · margen amplio</option><option value="medium">Media</option><option value="hard">Difícil</option><option value="master">Maestro · máxima precisión</option></select></label><label>Fase<select id="strategyPhase"><option value="all">Todas</option><option value="apertura">Apertura</option><option value="medio juego">Medio juego</option><option value="final">Final</option></select></label><label class="span2">Apertura<select id="strategyOpening"><option value="all">Todas las aperturas</option>${openingNames.map(name=>`<option value="${esc(name)}">${name}</option>`).join('')}</select></label><label class="toggle span2"><input id="repeatFailed" type="checkbox" ${this.db.settings.repeatFailed?'checked':''}><span>Priorizar posiciones falladas</span></label></div><button id="begin" class="primary" ${sourceProblems.length?'':'disabled'}>INICIAR SESIÓN</button><small>${sourceProblems.length?`${sourceProblems.length} posiciones disponibles en ${this.strategySource==='master'?'partidas magistrales':'partidas propias'}.`:'No hay posiciones disponibles en esta fuente.'}</small></div><aside class="panel training-stats"><h2>Progreso</h2><div class="stat-grid"><span><b>${stats.attempted}</b> practicadas</span><span><b>${stats.mastered}</b> dominadas</span><span><b>${stats.failed}</b> para repetir</span><span><b>${(stats.average*100).toFixed(0)}%</b> promedio</span></div><h3>Por fase</h3>${Object.entries(stats.phases).map(([phase,count])=>`<div class="stat-bar"><span>${phase}</span><i style="--value:${stats.total?count/stats.total*100:0}%"></i><b>${count}</b></div>`).join('')||'<p>Sin datos todavía.</p>'}</aside></section>`;
+   $('[data-back]').onclick=()=>{this.strategySource=null;this.render()};$('#strategyDifficulty').value=this.db.settings.strategyDifficulty||'medium';$('#strategyPhase').value=this.db.settings.strategyPhase||'all';$('#strategyOpening').value=this.db.settings.strategyOpening||'all';$('#begin').onclick=()=>{this.db.settings.strategyLength=Number($('#len').value);this.db.settings.strategySessionSize=clamp($('#sessionSize').value,1,50);this.db.settings.strategyDifficulty=$('#strategyDifficulty').value;this.db.settings.strategyPhase=$('#strategyPhase').value;this.db.settings.strategyOpening=$('#strategyOpening').value;this.db.settings.repeatFailed=$('#repeatFailed').checked;saveDb(this.db);this.beginStrategy(this.db.settings.strategyLength,true)};return
+  }
+  const problem=this.strategy.problem;if(!this.strategy.activeFen)this.strategy.activeFen=problem.fen;const displayFen=this.strategy.review?.line?.[this.strategy.review.index]?.fen||this.strategy.activeFen;this.chess.load(displayFen);const originalTurn=new Chess(problem.fen).turn(),turn=originalTurn==='w'?'Blancas':'Negras',sessionDone=this.strategy.sessionIndex>=this.strategy.queue.length-1&&this.strategy.completed,average=this.strategy.sessionResults.length?this.strategy.sessionResults.reduce((sum,item)=>sum+item,0)/this.strategy.sessionResults.length:0;
+  const previousFlip=this.boardFlipped;this.boardFlipped=originalTurn==='b';const strategyBoard=this.boardHtml(this.chess,true),strategyArrows=this.arrowsSvg();this.boardFlipped=previousFlip;
+  v.innerHTML=`<section class="page-head"><button data-back>←</button><div><small>ESTRATEGIA · EJERCICIO ${this.strategy.sessionIndex+1}/${this.strategy.queue.length} · PASO ${Math.min(this.strategy.step+1,this.strategy.length)}/${this.strategy.length}</small><h1>Juegan ${turn}</h1><p>${problem.masterTitle?`${esc(problem.masterTitle)} · ${esc(problem.masterWhite||'')} vs ${esc(problem.masterBlack||'')}<br>`:''}${problem.openingName||'Apertura no identificada'} · ${problem.phase||phaseFromFen(problem.fen)} · apareció ${problem.frequency||1} vez/veces</p></div><div class="score">${this.strategy.score.toFixed(2)} pts</div></section><section class="analysis-layout"><div class="board-stage"><div class="board-perspective-badge">Vista desde ${turn}</div><div class="board-wrap" style="${this.customBoardStyle()}"><div class="board" id="strategy-board">${strategyBoard}</div>${strategyArrows}</div>${this.annotationPanel()}</div><aside class="panel"><div class="session-progress"><i style="--progress:${((this.strategy.sessionIndex+(this.strategy.completed?1:0))/this.strategy.queue.length)*100}%"></i><span>Promedio de sesión: ${(average*100).toFixed(0)}%</span></div><p>Encuentra una de las mejores jugadas válidas. La respuesta rival se calcula desde la rama elegida.</p><div id="strategy-msg">${this.strategy.review?(this.strategy.review.loading?'Analizando una continuación posible…':'Revisa tu jugada y vuelve a intentarlo cuando estés listo.'):this.strategy.completed?'Ejercicio completado.':this.strategy.candidates.length?'Elige una pieza y realiza tu jugada.':'Preparando posición…'}</div>${this.strategy.review?this.strategyReviewHtml():''}${this.strategy.feedback?`<h3>Candidatas de la jugada anterior</h3><small class="strategy-perspective">Escala estándar: positivo favorece a blancas y negativo a negras. El orden se adapta al bando que debía jugar. Solo se premian candidatas dentro del margen de ${this.strategy.difficulty}.</small>${this.strategyCandidatesHtml()}`:''}<div class="actions">${this.strategy.review?'':this.strategy.completed?sessionDone?'<button id="finishSession" class="primary">VER RESUMEN DE SESIÓN</button>':'<button id="nextExercise" class="primary">SIGUIENTE EJERCICIO →</button><button id="analyzeExercise">ANALIZAR ESTA POSICIÓN</button>':''}<button id="skip">${this.strategy.completed?'Volver':'Saltar posición'}</button></div></aside></section>`;
+  $('[data-back]').onclick=()=>{this.strategy.problem=null;this.render()};$('#skip').onclick=()=>{this.strategy.problem=null;this.render()};$('#nextExercise')?.addEventListener('click',()=>this.nextStrategyExercise());$('#finishSession')?.addEventListener('click',()=>this.finishStrategySession());$('#analyzeExercise')?.addEventListener('click',()=>this.openStrategyAnalysis());$('#reviewPrev')?.addEventListener('click',()=>this.navigateStrategyReview(-1));$('#reviewNext')?.addEventListener('click',()=>this.navigateStrategyReview(1));$('#retryExercise')?.addEventListener('click',()=>this.retryStrategyExercise());$$('[data-review-jump]').forEach(button=>button.addEventListener('click',()=>this.jumpStrategyReview(Number(button.dataset.reviewJump))));if(!this.strategy.completed&&!this.strategy.review){this.bindStrategyBoard();this.bindAnnotationPanel()}else{this.bindStaticAnnotationBoard('#strategy-board','strategy');this.bindAnnotationPanel()}if(!this.strategy.candidates.length&&!this.strategy.completed&&!this.strategy.review)this.prepareStrategy()
+ }
+ strategyCandidatesHtml(){return `<div class="candidate-podium">${this.strategy.feedback.map((candidate,index)=>`<article class="rank-${index+1} ${this.strategy.chosenUci===candidate.uci?'chosen':''}"><b>#${index+1}</b><span>${candidate.san||candidate.uci}</span><strong>${scoreText(candidate)}</strong><small>${candidate.reason||'Jugada sólida según Stockfish'}</small>${this.strategy.chosenUci===candidate.uci?`<em>Tu elección · ${[1,.75,.5][index]} pts</em>`:''}</article>`).join('')}</div>`}
+ strategyReviewHtml(){const review=this.strategy.review;if(!review)return '';const node=review.line[review.index],moves=review.line.slice(1).map((item,index)=>`<button type="button" data-review-jump="${index+1}" class="${review.index===index+1?'active':''}"><b>${index+1}.</b> ${esc(item.san||'—')}</button>`).join('');return `<section class="strategy-review"><small>REVISIÓN DE TU JUGADA</small><h3>${esc(review.userSan)} no estaba entre las tres candidatas</h3><p>Esta es una continuación posible calculada desde tu elección. Avanza o retrocede para estudiar cómo puede responder el rival.</p><div class="strategy-review-line">${moves}</div><div class="strategy-review-controls"><button id="reviewPrev" ${review.index<=0?'disabled':''}>← Posición anterior</button><span>${review.index}/${Math.max(1,review.line.length-1)} · ${esc(node?.label||'Posición inicial')}</span><button id="reviewNext" ${review.index>=review.line.length-1?'disabled':''}>Posición siguiente →</button></div><button id="retryExercise" class="primary">↺ REINICIAR EJERCICIO Y VOLVER A INTENTAR</button></section>`}
+ navigateStrategyReview(delta){const review=this.strategy.review;if(!review)return;review.index=clamp(review.index+delta,0,review.line.length-1);this.chess.load(review.line[review.index].fen);this.lastMove=review.line[review.index].lastMove||null;this.selected=null;this.legal=[];this.renderStrategy()}
+ jumpStrategyReview(index){const review=this.strategy.review;if(!review)return;review.index=clamp(index,0,review.line.length-1);this.chess.load(review.line[review.index].fen);this.lastMove=review.line[review.index].lastMove||null;this.selected=null;this.legal=[];this.renderStrategy()}
+ retryStrategyExercise(){this.strategy.review=null;this.strategy.feedback=null;this.strategy.chosenUci=null;this.strategy.activeFen=this.strategy.problem.fen;this.chess.load(this.strategy.problem.fen);this.lastMove=null;this.selected=null;this.legal=[];this.annotations.clear();this.arrows=[];this.renderStrategy()}
+ async buildStrategyReview(move){const originalFen=this.chess.fen(),line=[{fen:originalFen,san:null,label:'Posición inicial',lastMove:null}],test=new Chess(originalFen),played=test.move({from:move.from,to:move.to,promotion:move.promotion||'q'});if(!played)return;const token=crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;line.push({fen:test.fen(),san:played.san,label:`Tu jugada: ${played.san}`,lastMove:[played.from,played.to]});this.strategy.feedback=[...this.strategy.candidates];this.strategy.chosenUci=played.from+played.to+(played.promotion||'');this.strategy.review={line,index:1,userSan:played.san,loading:true,token};this.chess.load(test.fen());this.lastMove=[played.from,played.to];this.selected=null;this.legal=[];this.renderStrategy();try{for(let ply=0;ply<4&&!test.isGameOver();ply++){const analysis=await this.engine.analyse(test.fen(),{depth:Math.min(18,Math.max(8,this.cfg.depth)),multiPv:1,skill:this.cfg.skill});if(this.strategy.review?.token!==token||this.screen!=='strategy')return;if(!analysis?.[0]?.uci)break;const reply=test.move(uciToMove(analysis[0].uci));if(!reply)break;line.push({fen:test.fen(),san:reply.san,label:`Continuación: ${reply.san}`,lastMove:[reply.from,reply.to]})}}catch{/* La revisión conserva al menos la jugada del usuario. */}if(this.strategy.review?.token!==token||this.screen!=='strategy')return;this.strategy.review={line,index:1,userSan:played.san,loading:false,token};this.chess.load(line[1].fen);this.lastMove=line[1].lastMove;this.renderStrategy()}
+
+ buildStrategyPool(){let pool=[...this.strategySourceProblems()];const phase=this.db.settings.strategyPhase||'all',opening=this.db.settings.strategyOpening||'all';if(phase!=='all')pool=pool.filter(problem=>(problem.phase||phaseFromFen(problem.fen))===phase);if(opening!=='all')pool=pool.filter(problem=>problem.openingName===opening);if(this.db.settings.repeatFailed)pool.sort((a,b)=>Number(Boolean(b.failed))-Number(Boolean(a.failed))||Number(a.best??-1)-Number(b.best??-1));else pool.sort(()=>Math.random()-.5);return pool.slice(0,clamp(this.db.settings.strategySessionSize||10,1,50))}
+ beginStrategy(length,preserveSession=false){this.selected=null;this.legal=[];this.lastMove=null;this.annotations.clear();this.arrows=[];this.rightAnnotation=null;const queue=preserveSession?this.buildStrategyPool():this.strategy.queue;if(!queue?.length){alert('No hay posiciones que coincidan con los filtros.');return}this.strategy={length,index:0,step:0,score:0,problem:queue[0],activeFen:null,candidates:[],feedback:null,chosenUci:null,completed:false,queue,sessionIndex:0,difficulty:this.db.settings.strategyDifficulty||'medium',sessionResults:[],review:null};this.lastStrategyProblemId=queue[0]?.id;this.render()}
+ nextStrategyExercise(){const nextIndex=this.strategy.sessionIndex+1;if(nextIndex>=this.strategy.queue.length)return this.finishStrategySession();const queue=this.strategy.queue,results=this.strategy.sessionResults,difficulty=this.strategy.difficulty,length=this.strategy.length;this.strategy={length,index:0,step:0,score:0,problem:queue[nextIndex],activeFen:null,candidates:[],feedback:null,chosenUci:null,completed:false,queue,sessionIndex:nextIndex,difficulty,sessionResults:results,review:null};this.annotations.clear();this.arrows=[];this.selected=null;this.legal=[];this.render()}
+ finishStrategySession(){const results=this.strategy.sessionResults,average=results.length?results.reduce((sum,value)=>sum+value,0)/results.length:0;this.strategy.problem=null;this.render();alert(`Sesión completada: ${results.length} ejercicios · promedio ${(average*100).toFixed(0)}%.`)}
+ async prepareStrategy(){try{const turn=this.chess.turn(),raw=await this.engine.analyse(this.chess.fen(),{depth:this.cfg.depth,multiPv:5,skill:this.cfg.skill}),valid=validCandidates(raw,turn,this.strategy.difficulty,Math.min(3,raw.length));this.strategy.candidates=valid.map(candidate=>{const test=new Chess(this.chess.fen()),move=test.move(uciToMove(candidate.uci));return {...candidate,displayScore:candidate.score,perspective:turn,san:move?.san||candidate.uci,reason:move?.san?.includes('+')?'Jaque y ganancia de tiempo':move?.captured?'Captura o transformación material':move?.isKingsideCastle?.()||move?.isQueensideCastle?.()?'Seguridad del rey':'Mejora la posición'}});this.render()}catch{$('#strategy-msg').textContent='No se pudo analizar la posición.'}}
+ bindStrategyBoard(){const board=$('#strategy-board');this.bindKeyboardBoard(board);const act=(from,to)=>this.answerStrategy(from,to);board.oncontextmenu=event=>event.preventDefault();$$('[data-square]',board).forEach(square=>{square.onclick=()=>{if(Date.now()<(this.suppress||0))return;this.annotations.clear();this.arrows=[];const sq=square.dataset.square;if(this.selected&&this.legal.includes(sq)){act(this.selected,sq);return}const piece=this.chess.get(sq);if(piece?.color===this.chess.turn()){this.selected=sq;this.legal=this.chess.moves({square:sq,verbose:true}).map(move=>move.to);this.renderStrategy()}else{this.selected=null;this.legal=[];this.renderStrategy()}};square.onpointerdown=event=>event.button===2?this.startRightAnnotation(event,square.dataset.square,'strategy'):this.startVisualDrag(event,square.dataset.square,'strategy');square.onpointermove=event=>{this.dragMove(event);this.moveRightAnnotation(event)};square.onpointerup=event=>this.rightAnnotation?this.endRightAnnotation(event):this.endVisualDrag(event,act);square.onpointercancel=event=>{this.cancelRightAnnotation(event);this.endVisualDrag(event,act)}})}
+ async answerStrategy(from,to){const move=this.chess.moves({square:from,verbose:true}).find(item=>item.to===to);if(!move)return;const uci=move.from+move.to+(move.promotion||''),rank=this.strategy.candidates.findIndex(candidate=>candidate.uci===uci);if(rank<0){await this.buildStrategyReview(move);return}this.strategy.feedback=[...this.strategy.candidates];this.strategy.feedbackTurn=this.chess.turn();this.strategy.chosenUci=uci;this.strategy.score+=[1,.75,.5][rank];this.chess.move({from,to,promotion:'q'});this.lastMove=[from,to];this.strategy.step++;this.selected=null;this.legal=[];if(this.strategy.step>=this.strategy.length){const normalized=this.strategy.score/this.strategy.length;this.strategy.problem.attempts=Number(this.strategy.problem.attempts||0)+1;this.strategy.problem.best=Math.max(Number(this.strategy.problem.best??-1),normalized);this.strategy.problem.failed=normalized<.5;this.strategy.sessionResults.push(normalized);if(this.strategySource==='master'){this.db.settings.masterStrategyProgress=this.db.settings.masterStrategyProgress||{};this.db.settings.masterStrategyProgress[this.strategy.problem.id]={attempts:this.strategy.problem.attempts,best:this.strategy.problem.best,failed:this.strategy.problem.failed}}saveDb(this.db);this.strategy.completed=true;this.strategy.activeFen=this.chess.fen();this.render();return}try{const response=await this.engine.analyse(this.chess.fen(),{depth:this.cfg.depth,multiPv:1,skill:this.cfg.skill}),reply=uciToMove(response[0].uci);this.chess.move(reply);this.lastMove=[reply.from,reply.to];this.strategy.activeFen=this.chess.fen();this.strategy.candidates=[];this.render()}catch{this.strategy.completed=true;this.render()}}
+ openStrategyAnalysis(){const fen=this.strategy.activeFen||this.chess.fen();this.analysisReturn='strategy';this.chess.load(fen);this.analysisTimeline=[];this.ensureAnalysisTimeline(true);this.selected=null;this.legal=[];this.lastMove=null;this.analysis=null;this.analysisMoveQuality=null;this.annotations.clear();this.arrows=[];this.screen='analysis';this.render()}
+ renderCustomize(){
+  const v=$('#view'),sets=this.db.custom.namedSets||[];
+  v.innerHTML=`<section class="page-head"><button data-back>←</button><div><small>PERSONALIZAR</small><h1>Tablero y piezas</h1></div></section><section class="custom-grid"><div class="panel"><h2>Tablero</h2><p>Elige Azul, Verde, Rojo, Amarillo o Morado, o importa texturas PNG/JPG. Los archivos se guardan en IndexedDB.</p><label>Casillas claras<input id="lightImg" type="file" accept="image/png,image/jpeg"></label><label>Casillas oscuras<input id="darkImg" type="file" accept="image/png,image/jpeg"></label><button id="resetBoard">Restablecer texturas</button></div><div class="panel"><h2>Piezas</h2><p>Importa cada pieza o selecciona las doce imágenes a la vez con nombres como <code>white_king.png</code> y <code>black_pawn.png</code>.</p><label class="file-button batch-piece">Importar paquete de imágenes<input id="pieceBatch" type="file" multiple accept="image/png,image/jpeg"></label><div class="piece-imports">${['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp'].map(key=>`<label>${key.toUpperCase()}<input data-piece="${key}" type="file" accept="image/png,image/jpeg"></label>`).join('')}</div><div class="row"><button id="savePieceSet">Guardar conjunto</button><button id="resetPieces">Restablecer piezas</button></div>${sets.length?`<label>Conjuntos guardados<select id="pieceSet"><option value="">Seleccionar…</option>${sets.map((set,index)=>`<option value="${index}">${set.name}</option>`).join('')}</select></label>`:''}</div><div class="board-wrap preview" style="${this.customBoardStyle()}"><div class="board">${this.boardHtml(new Chess(),false)}</div></div></section>`;
+  $('[data-back]').onclick=()=>{this.screen='home';this.render()};$('#lightImg').onchange=event=>this.readImage(event.target.files[0],data=>{this.db.custom.boardLight=data;saveDb(this.db);this.render()});$('#darkImg').onchange=event=>this.readImage(event.target.files[0],data=>{this.db.custom.boardDark=data;saveDb(this.db);this.render()});$$('[data-piece]').forEach(input=>input.onchange=event=>this.readImage(event.target.files[0],data=>{this.db.custom.pieces[input.dataset.piece]=data;saveDb(this.db);this.render()}));$('#pieceBatch').onchange=event=>this.importPieceBatch([...event.target.files]);$('#savePieceSet').onclick=()=>this.savePieceSet();$('#pieceSet')?.addEventListener('change',event=>{const set=sets[Number(event.target.value)];if(set){this.db.custom.pieces={...set.pieces};saveDb(this.db);this.render()}});$('#resetBoard').onclick=()=>{this.db.custom.boardLight=null;this.db.custom.boardDark=null;saveDb(this.db);this.render()};$('#resetPieces').onclick=()=>{this.db.custom.pieces={};saveDb(this.db);this.render()}
+ }
+ readImage(file,callback){if(!file)return;if(file.size>5_000_000){alert('Máximo 5 MB por imagen.');return}if(!/^image\/(png|jpeg)$/.test(file.type)){alert('Formato no compatible. Usa PNG o JPG.');return}const reader=new FileReader();reader.onload=()=>callback(reader.result);reader.readAsDataURL(file)}
+ async importPieceBatch(files){const aliases={white_king:'wk',white_queen:'wq',white_rook:'wr',white_bishop:'wb',white_knight:'wn',white_pawn:'wp',black_king:'bk',black_queen:'bq',black_rook:'br',black_bishop:'bb',black_knight:'bn',black_pawn:'bp',wk:'wk',wq:'wq',wr:'wr',wb:'wb',wn:'wn',wp:'wp',bk:'bk',bq:'bq',br:'br',bb:'bb',bn:'bn',bp:'bp'},loaded={};for(const file of files){const base=file.name.toLowerCase().replace(/\.(png|jpe?g)$/,'').replace(/[ -]+/g,'_'),key=aliases[base];if(!key)continue;loaded[key]=await new Promise(resolve=>this.readImage(file,resolve))}Object.assign(this.db.custom.pieces,loaded);saveDb(this.db);this.render();alert(`Se importaron ${Object.keys(loaded).length} de 12 piezas.`)}
+ savePieceSet(){const count=Object.keys(this.db.custom.pieces||{}).length;if(!count)return alert('Primero importa algunas piezas.');const name=prompt('Nombre del conjunto:');if(!name)return;this.db.custom.namedSets=this.db.custom.namedSets||[];this.db.custom.namedSets.push({name,pieces:{...this.db.custom.pieces},createdAt:Date.now()});saveDb(this.db);this.render()}
+ renderLibrary(){
+  const v=$('#view'),stats=buildGameStats(this.db.games),training=buildTrainingStats(this.db.problems),query=this.libraryFilter.query.toLowerCase();let games=this.db.games.filter(game=>(!query||`${game.white} ${game.black} ${game.openingName||''} ${game.date}`.toLowerCase().includes(query))&&(this.libraryFilter.result==='all'||game.result===this.libraryFilter.result)&&(this.libraryFilter.mode==='all'||game.mode===this.libraryFilter.mode)&&(this.libraryFilter.opening==='all'||game.openingName===this.libraryFilter.opening));const openingNames=[...new Set(this.db.games.map(game=>game.openingName).filter(Boolean))].sort();
+  v.innerHTML=`<section class="page-head"><button data-back>←</button><div><small>BIBLIOTECA</small><h1>Partidas, repertorio y progreso</h1></div></section><section class="library-stats stat-grid"><span><b>${stats.total}</b> partidas</span><span><b>${stats.whiteWins}</b> victorias blancas</span><span><b>${stats.blackWins}</b> victorias negras</span><span><b>${stats.draws}</b> tablas</span><span><b>${training.total}</b> ejercicios</span><span><b>${training.failed}</b> por repetir</span></section><section class="library"><div class="panel library-games"><header><div><h2>Partidas guardadas</h2><small>${games.length} resultados visibles</small></div><div class="row"><button id="exportSelected">Exportar seleccionadas</button><button id="exportAll">Exportar todas</button></div></header><div class="library-filters"><input id="libraryQuery" placeholder="Buscar jugadores o apertura…" value="${esc(this.libraryFilter.query)}"><select id="libraryResult"><option value="all">Todos los resultados</option><option value="1-0">1-0</option><option value="0-1">0-1</option><option value="1/2-1/2">Tablas</option><option value="*">Inconclusas</option></select><select id="libraryMode"><option value="all">Todos los modos</option><option value="pvp">J1 vs J2</option><option value="pvc">J1 vs COM</option><option value="cvc">COM vs COM</option><option value="tcom">T-COM vs T-COM</option><option value="pvc-simultaneous">Simultáneas</option></select><select id="libraryOpening"><option value="all">Todas las aperturas</option>${openingNames.map(name=>`<option value="${esc(name)}">${name}</option>`).join('')}</select></div><div class="game-library-list">${games.length?games.slice(0,200).map(game=>`<article><input type="checkbox" data-select-game="${game.id}" ${this.selectedLibraryGames.has(game.id)?'checked':''}><div><b>${new Date(game.date).toLocaleString()}</b><span>${game.white} vs ${game.black} · ${game.result||'*'} · ${game.openingName||'Fuera de libro'}</span></div><button data-loadgame="${game.id}">Analizar</button>${game.result==='*'?`<button data-continuegame="${game.id}">Continuar</button>`:''}<button data-deletegame="${game.id}" class="danger-inline">Eliminar</button></article>`).join(''):'<p>No hay partidas que coincidan con los filtros.</p>'}</div></div><div class="panel"><h2>Aperturas y rendimiento personal</h2><p class="opening-library-note">Base integrada: ${OPENINGS.length} registros. Se muestran los primeros 300 para mantener la interfaz fluida; usa el explorador y su buscador para acceder al resto.</p><div class="opening-list">${OPENINGS.slice(0,300).map(opening=>{const personal=stats.openings[opening.name];return `<article><b>${opening.name}</b><span>${opening.kind} · Zero ${(opening.zero*100).toFixed(0)}% · Omega ${(opening.omega*100).toFixed(0)}%${personal?` · ${personal.games} partidas`:''}</span></article>`}).join('')}</div></div></section>`;
+  $('[data-back]').onclick=()=>{this.screen='home';this.render()};$('#libraryResult').value=this.libraryFilter.result;$('#libraryMode').value=this.libraryFilter.mode;$('#libraryOpening').value=this.libraryFilter.opening;const rerender=()=>{this.libraryFilter={query:$('#libraryQuery').value,result:$('#libraryResult').value,mode:$('#libraryMode').value,opening:$('#libraryOpening').value};this.renderLibrary()};$('#libraryQuery').onchange=rerender;$('#libraryResult').onchange=rerender;$('#libraryMode').onchange=rerender;$('#libraryOpening').onchange=rerender;$$('[data-select-game]').forEach(input=>input.onchange=()=>input.checked?this.selectedLibraryGames.add(input.dataset.selectGame):this.selectedLibraryGames.delete(input.dataset.selectGame));$$('[data-loadgame]').forEach(button=>button.onclick=()=>this.openGameInAnalysis(button.dataset.loadgame));$$('[data-continuegame]').forEach(button=>button.onclick=()=>this.continueGame(button.dataset.continuegame));$$('[data-deletegame]').forEach(button=>button.onclick=()=>this.deleteGame(button.dataset.deletegame));$('#exportAll').onclick=()=>this.exportGames(this.db.games);$('#exportSelected').onclick=()=>this.exportGames(this.db.games.filter(game=>this.selectedLibraryGames.has(game.id)))
+ }
+ openGameInAnalysis(id){const game=this.db.games.find(item=>item.id===id);if(!game)return;this.chess.reset();this.chess.loadPgn(game.pgn);this.analysisTimeline=[];this.ensureAnalysisTimeline(true);this.analysis=null;this.analysisReturn='library';this.screen='analysis';this.render()}
+ openMasterGameInAnalysis(id){const game=MASTER_GAMES.find(item=>item.id===id);if(!game)return;this.chess.reset();this.chess.loadPgn(game.pgn);this.analysisTimeline=[];this.ensureAnalysisTimeline(true);this.analysis=null;this.analysisReturn='home';this.screen='analysis';this.render()}
+ continueGame(id){const game=this.db.games.find(item=>item.id===id);if(!game)return;this.cfg.mode='pvp';this.chess.reset();this.chess.loadPgn(game.pgn);this.positions=(game.positions||[]).length?game.positions:[{fen:this.chess.fen(),ply:this.chess.history().length}];this.gameSaved=false;this.lastMove=null;this.screen='game';this.startClock();this.render()}
+ deleteGame(id){if(!confirm('¿Eliminar esta partida?'))return;this.db.games=this.db.games.filter(game=>game.id!==id);this.db.problems=this.db.problems.filter(problem=>problem.sourceGame!==id);this.selectedLibraryGames.delete(id);saveDb(this.db);this.renderLibrary()}
+ exportGames(games){if(!games.length)return alert('No hay partidas seleccionadas.');const text=games.map((game,index)=>`[Event "OmegaZero"]\n[Round "${index+1}"]\n[White "${game.white}"]\n[Black "${game.black}"]\n[Result "${game.result||'*'}"]\n[Opening "${game.openingName||''}"]\n\n${game.pgn}`).join('\n\n');downloadText(`OmegaZero-${games.length}-partidas.pgn`,text,'application/x-chess-pgn')}
+ ensureTComLab(){
+  if(this.tcomLab)return this.tcomLab;
+  const saved=this.db.settings.tcomLabConfig||{};
+  const normalizeModule=(module,fallback)=>({
+   type:module?.type==='stockfish'?'stockfish':'transform',
+   name:String(module?.name||fallback.name),
+   expressions:Array.isArray(module?.expressions)&&module.expressions.length?module.expressions:[...fallback.expressions],
+   reducer:module?.reducer||'auto',stabilize:module?.stabilize!==false,
+  });
+  this.tcomLab={
+   white:normalizeModule(saved.white,{name:'X · exp(a)',expressions:['X(a)=exp(a)']}),
+   black:normalizeModule(saved.black,{name:'Y · exp(A)',expressions:['Y(A)=exp(A)']}),
+   gamesTarget:clamp(Number(saved.gamesTarget||100),1,1000),maxPlies:clamp(Number(saved.maxPlies||220),20,600),
+   diversity:clamp(Number(saved.diversity||4),0,50),openingPlies:clamp(Number(saved.openingPlies??4),0,16),
+   delay:clamp(Number(saved.delay??20),0,1000),stockfishDepth:clamp(Number(saved.stockfishDepth||8),1,24),
+   speed:[.25,.5,.75,1,1.25,1.5,2].includes(Number(saved.speed))?Number(saved.speed):1,
+   annotateStockfish:saved.annotateStockfish!==false,stockfishEvalNodes:clamp(Number(saved.stockfishEvalNodes||1200),200,50000),
+   alternateColors:saved.alternateColors!==false,saveGames:Boolean(saved.saveGames),
+   boardControl:['off','w','b','both'].includes(saved.boardControl)?saved.boardControl:'both',autoReply:saved.autoReply!==false,
+   running:false,paused:false,token:null,current:null,results:[],progress:'Listo para iniciar.',
+   evalCache:new Map(),stockfishEvalCache:new Map(),seriesStartedAt:0,lastError:'',boardSelected:null,boardLegal:[],manualThinking:false,
+   activeEditorSide:'white',activeEditorIndex:0,
+  };
+  return this.tcomLab;
+ }
+ persistTComConfig(){const lab=this.ensureTComLab();this.db.settings.tcomLabConfig={white:{...lab.white,expressions:[...lab.white.expressions]},black:{...lab.black,expressions:[...lab.black.expressions]},gamesTarget:lab.gamesTarget,maxPlies:lab.maxPlies,diversity:lab.diversity,openingPlies:lab.openingPlies,delay:lab.delay,speed:lab.speed,stockfishDepth:lab.stockfishDepth,annotateStockfish:lab.annotateStockfish,stockfishEvalNodes:lab.stockfishEvalNodes,alternateColors:lab.alternateColors,saveGames:lab.saveGames,boardControl:lab.boardControl,autoReply:lab.autoReply};saveDb(this.db)}
+ cloneTComModule(module){return {...module,expressions:[...(module?.expressions||[])]}}
+ tcomMoveTailHtml(chess,limit=24){const history=chess?.history?.()||[],start=Math.max(0,history.length-limit);return history.slice(start).map((san,index)=>{const ply=start+index,move=Math.floor(ply/2)+1,prefix=ply%2===0?`${move}.`:`${move}...`;return `<span>${prefix} ${esc(san)}</span>`}).join('')}
+ tcomReducerOptions(selected){return [['auto','Automático / norma F'],['trace','Traza'],['determinant','Determinante'],['pseudoDeterminant','Pseudodeterminante'],['spectralRadius','Radio espectral'],['condition','Condición efectiva']].map(([value,label])=>`<option value="${value}" ${selected===value?'selected':''}>${label}</option>`).join('')}
+ tcomSpeedOptions(selected){return [.25,.5,.75,1,1.25,1.5,2].map(value=>`<option value="${value}" ${Number(selected)===value?'selected':''}>x${value}</option>`).join('')}
+ tcomModuleCriterion(module){
+  if(module?.type==='stockfish')return `Stockfish · profundidad ${this.ensureTComLab().stockfishDepth}`;
+  const expressions=(module?.expressions||[]).join(' ; ')||'Sin función';
+  const reducer={auto:'norma de Frobenius',trace:'traza',determinant:'determinante',pseudoDeterminant:'pseudodeterminante',spectralRadius:'radio espectral',condition:'condición efectiva'}[module?.reducer]||module?.reducer||'automático';
+  return `${expressions} | reductor: ${reducer} | estabilización: ${module?.stabilize===false?'no':'signo·ln(1+|x|)'}`;
+ }
+ async tcomStockfishEvaluation(fen,token){
+  const lab=this.ensureTComLab();if(!lab.annotateStockfish)return null;
+  const key=`${lab.stockfishEvalNodes}|${String(fen).split(' ').slice(0,4).join(' ')}`,cached=lruGet(lab.stockfishEvalCache,key);if(cached!==undefined)return cached;
+  try{
+   await this.engine.init();if(token&&lab.token!==token)return null;
+   const result=await this.engine.analyse(fen,{nodes:lab.stockfishEvalNodes,multiPv:1,skill:20,timeoutMs:60000}),best=result?.[0];
+   if(!best||!Number.isFinite(best.score))return lruSet(lab.stockfishEvalCache,key,{cp:null,mate:null,error:'Sin evaluación'},12000);
+   return lruSet(lab.stockfishEvalCache,key,{cp:best.score,mate:Number.isFinite(best.mate)?best.mate:null,error:''},12000);
+  }catch(error){
+   if(String(error?.message||'').includes('cancel'))return null;
+   return lruSet(lab.stockfishEvalCache,key,{cp:null,mate:null,error:error?.message||'Error de Stockfish'},12000);
+  }
+ }
+ tcomDecisionRecord(current,move,decision,stockfish){
+  const module=move.color==='w'?current.white:current.black,chosen=decision?.chosen||{};
+  return {ply:current.chess.history().length,color:move.color,san:move.san,uci:chosen.uci||`${move.from}${move.to}${move.promotion||''}`,moduleName:module.name,moduleType:module.type,criterion:this.tcomModuleCriterion(module),reducer:module.reducer||'auto',stabilize:module.stabilize!==false,score:Number.isFinite(chosen.score)?chosen.score:null,rawScore:Number.isFinite(chosen.rawScore)?chosen.rawScore:null,stockfishCp:Number.isFinite(stockfish?.cp)?stockfish.cp:null,stockfishMate:Number.isFinite(stockfish?.mate)?stockfish.mate:null,stockfishError:stockfish?.error||''};
+ }
+ tcomCalculatorKeysHtml(side){
+  const rows=[
+   ['sin(','cos(','tan(','exp(','ln(','log10('],
+   ['sqrt(','abs(','tanh(','sign(','det(','pdet('],
+   ['tr(','rank(','norm(','cond(','eig(','svd('],
+   ['+','-','*','/','^','(',')'],
+   ['I','pi','e',',','←'],
+  ];
+  return `<div class="tcom-target-keys"><button type="button" data-tcom-key-side="${side}" data-tcom-key="a"><b>a</b><span>valor</span></button><button type="button" data-tcom-key-side="${side}" data-tcom-key="A"><b>A</b><span>matriz</span></button></div><div class="tcom-math-keypad">${rows.flat().map(key=>`<button type="button" data-tcom-key-side="${side}" data-tcom-key="${esc(key)}">${esc(key)}</button>`).join('')}</div>`;
+ }
+ tcomExpressionRowsHtml(side,module){
+  return (module.expressions||[]).map((expression,index)=>{const info=this.transformExpressionInfo(expression,index);return `<div class="tcom-expression-row"><span class="transform-expression-scope ${info.target==='a+A'?'mixed':''}">${info.target}</span><input data-tcom-expression="${side}.${index}" value="${esc(expression)}" spellcheck="false" aria-label="Función ${index+1} de ${side==='white'?'blancas':'negras'}"><button type="button" data-tcom-delete-expression="${side}.${index}" title="Eliminar función">×</button></div>`}).join('');
+ }
+ tcomModuleEditorHtml(side,module){
+  const title=side==='white'?'Módulo de blancas':'Módulo de negras',isStockfish=module.type==='stockfish';
+  return `<details class="tcom-module-card transform-card" open><summary>${title}<span>${isStockfish?'Stockfish':'T-COM'}</span></summary><div class="transform-card-body"><label>Tipo de jugador<select data-tcom-field="${side}.type"><option value="transform" ${module.type==='transform'?'selected':''}>T-COM · transformación de un ply</option><option value="stockfish" ${isStockfish?'selected':''}>Stockfish · referencia</option></select></label><label>Nombre<input data-tcom-field="${side}.name" value="${esc(module.name)}"></label>${isStockfish?`<div class="tcom-stockfish-card"><b>Stockfish de referencia</b><span>Usará la profundidad configurada para elegir la semijugada. Puedes enfrentar T-COM vs Stockfish o Stockfish vs Stockfish.</span></div>`:`<section class="tcom-calculator" data-tcom-calculator="${side}"><header><div><b>Calculadora matemática</b><small>Usa <strong>a</strong> para valores y <strong>A</strong> para la matriz completa.</small></div><button type="button" data-tcom-add-expression="${side}">＋ Función</button></header><div class="tcom-expression-list">${this.tcomExpressionRowsHtml(side,module)}</div>${this.tcomCalculatorKeysHtml(side)}</section><label>Reductor de salida<select data-tcom-field="${side}.reducer">${this.tcomReducerOptions(module.reducer)}</select></label><label class="toggle"><input data-tcom-field="${side}.stabilize" type="checkbox" ${module.stabilize?'checked':''}><span>Estabilizar con signo·ln(1+|x|)</span></label>`}<small>${isStockfish?'Stockfish sí calcula variantes internas según su profundidad.':'El módulo genera todas las semijugadas legales, evalúa únicamente la posición inmediata y elige la mejor. No calcula respuestas ni variantes.'}</small></div></details>`;
+ }
+ tcomActiveExpressionInput(side){
+  const lab=this.ensureTComLab(),resolvedSide=side||lab.activeEditorSide||'white';
+  let index=resolvedSide===lab.activeEditorSide?lab.activeEditorIndex:0;
+  let input=$(`[data-tcom-expression="${resolvedSide}.${index}"]`);
+  if(!input){input=$(`[data-tcom-expression^="${resolvedSide}."]`);index=Number(input?.dataset.tcomExpression?.split('.')[1]||0)}
+  if(input){lab.activeEditorSide=resolvedSide;lab.activeEditorIndex=index}
+  return input;
+ }
+ insertTComKey(side,key){
+  const lab=this.ensureTComLab(),module=lab[side],input=this.tcomActiveExpressionInput(side);if(!input||!module)return;
+  const start=input.selectionStart??input.value.length,end=input.selectionEnd??start;
+  if(key==='←'){
+   if(start!==end){input.value=input.value.slice(0,start)+input.value.slice(end);input.setSelectionRange(start,start)}
+   else if(start>0){input.value=input.value.slice(0,start-1)+input.value.slice(start);input.setSelectionRange(start-1,start-1)}
+  }else{
+   input.value=input.value.slice(0,start)+key+input.value.slice(end);const next=start+key.length;input.setSelectionRange(next,next);
+  }
+  const index=Number(input.dataset.tcomExpression.split('.')[1]);module.expressions[index]=input.value;lab.activeEditorSide=side;lab.activeEditorIndex=index;input.focus();this.persistTComConfig();
+ }
+ addTComExpression(side){
+  const lab=this.ensureTComLab(),module=lab[side];if(!module)return;const index=module.expressions.length+1,usesMatrix=module.expressions.some(line=>this.transformExpressionInfo(line).target==='A');
+  module.expressions.push(usesMatrix?`F${index}(A)=A`:`f${index}(a)=a`);lab.activeEditorSide=side;lab.activeEditorIndex=module.expressions.length-1;this.persistTComConfig();this.renderTComLab();
+ }
+ deleteTComExpression(side,index){
+  const lab=this.ensureTComLab(),module=lab[side];if(!module||module.expressions.length<=1)return;module.expressions.splice(index,1);lab.activeEditorSide=side;lab.activeEditorIndex=clamp(index-1,0,module.expressions.length-1);this.persistTComConfig();this.renderTComLab();
+ }
+ tcomStats(){const lab=this.ensureTComLab(),results=lab.results;let white=0,black=0,draw=0;for(const result of results){if(result.result==='1-0')white++;else if(result.result==='0-1')black++;else draw++}return {total:results.length,white,black,draw,avg:results.length?results.reduce((sum,item)=>sum+item.plies,0)/results.length:0}}
+ tcomEffectiveDelay(){const lab=this.ensureTComLab();return Math.max(0,Number(lab.delay||0)/Math.max(.25,Number(lab.speed||1)))}
+ tcomBoardControlOptions(selected){return [['off','Solo observar'],['w','Jugar con blancas'],['b','Jugar con negras'],['both','Mover ambos bandos']].map(([value,label])=>`<option value="${value}" ${selected===value?'selected':''}>${label}</option>`).join('')}
+ tcomBoardInteractive(){const lab=this.ensureTComLab(),current=lab.current;if(!current||!current.manualGame||lab.running||lab.manualThinking||lab.boardControl==='off')return false;return lab.boardControl==='both'||lab.boardControl===current.chess.turn()}
+ tcomTurnModule(current=this.ensureTComLab().current){if(!current)return null;return current.chess.turn()==='w'?current.white:current.black}
+ tcomTurnText(){const lab=this.ensureTComLab(),current=lab.current;if(!current)return 'Crea una partida jugable o inicia el torneo';const color=current.chess.turn()==='w'?'blancas':'negras',module=this.tcomTurnModule(current);if(lab.manualThinking)return `${module?.name||'Módulo'} calcula…`;if(this.tcomBoardInteractive())return lab.boardControl==='both'?`Mueve ${color} en el tablero`:`Tu turno con ${color}`;return `${module?.name||'Módulo'} · turno de ${color}`}
+ tcomQueueAutoReply(){const lab=this.ensureTComLab(),module=this.tcomTurnModule();if(!lab.current?.manualGame||!lab.autoReply||lab.running||lab.manualThinking||this.tcomBoardInteractive()||module?.type==='human')return;setTimeout(()=>this.stepTComOnce({auto:true}),0)}
+ prepareTComPlayableGame(){const lab=this.ensureTComLab();if(lab.running)return null;const opening=this.tcomOpening();let white=this.cloneTComModule(lab.white),black=this.cloneTComModule(lab.black);if(lab.boardControl==='w'||lab.boardControl==='both')white={type:'human',name:lab.boardControl==='both'?'Jugador manual · blancas':'Jugador · blancas',expressions:[],reducer:'auto',stabilize:true};if(lab.boardControl==='b'||lab.boardControl==='both')black={type:'human',name:lab.boardControl==='both'?'Jugador manual · negras':'Jugador · negras',expressions:[],reducer:'auto',stabilize:true};lab.current={number:lab.results.length+1,chess:opening.chess,openingName:opening.name,white,black,positions:opening.positions.map(position=>({...position})),lastMove:null,lastDecision:null,decisions:[],startedAt:Date.now(),manualGame:true};lab.boardSelected=null;lab.boardLegal=[];lab.manualThinking=false;lab.progress=`Partida jugable preparada: ${white.name} vs ${black.name}.`;return lab.current}
+ bindTComBoard(){const board=$('#tcomBoard'),lab=this.ensureTComLab(),current=lab.current;if(!board||!current)return;this.bindKeyboardBoard(board);board.oncontextmenu=event=>event.preventDefault();$$('[data-square]',board).forEach(square=>{square.onclick=()=>{if(Date.now()<(this.suppress||0))return;this.tcomSelectSquare(square.dataset.square)};square.onpointerdown=event=>this.startVisualDrag(event,square.dataset.square,'tcom',current.chess);square.onpointermove=event=>this.dragMove(event);square.onpointerup=event=>this.endVisualDrag(event,(from,to)=>this.playTComManualMove(from,to));square.onpointercancel=event=>this.endVisualDrag(event,(from,to)=>this.playTComManualMove(from,to))})}
+ tcomSelectSquare(square){const lab=this.ensureTComLab();if(!this.tcomBoardInteractive())return;const current=lab.current,chess=current.chess;if(lab.boardSelected&&lab.boardLegal.includes(square)){this.playTComManualMove(lab.boardSelected,square);return}const piece=chess.get(square);if(piece?.color===chess.turn()){lab.boardSelected=square;lab.boardLegal=chess.moves({square,verbose:true}).map(move=>move.to)}else{lab.boardSelected=null;lab.boardLegal=[]}this.updateTComLive()}
+ async playTComManualMove(from,to){
+  const lab=this.ensureTComLab();if(!this.tcomBoardInteractive())return;
+  const current=lab.current,chess=current.chess,options=chess.moves({square:from,verbose:true}).filter(move=>move.to===to);if(!options.length)return;
+  let promotion='q';if(options.some(move=>move.promotion))promotion=await this.choosePromotion();
+  let move;try{move=chess.move({from,to,promotion})}catch{return}if(!move)return;
+  const decision={manual:true,module:move.color==='w'?current.white.name:current.black.name,candidates:[],chosen:{uci:move.from+move.to+(move.promotion||''),san:move.san,score:0,rawScore:0}};
+  current.lastMove=[move.from,move.to];current.lastDecision=decision;lab.boardSelected=null;lab.boardLegal=[];lab.progress=`Jugada manual: ${move.san}. Evaluando con Stockfish…`;this.updateTComLive();
+  const ownsToken=!lab.token,token=lab.token||crypto.randomUUID?.()||String(Date.now());if(ownsToken)lab.token=token;
+  const stockfish=await this.tcomStockfishEvaluation(chess.fen(),token);if(ownsToken&&lab.token===token)lab.token=null;
+  current.decisions.push(this.tcomDecisionRecord(current,move,decision,stockfish));
+  current.positions.push({fen:chess.fen(),ply:chess.history().length,stockfish:Number.isFinite(stockfish?.cp)?stockfish.cp:null});
+  lab.progress=`Jugada manual: ${move.san}${Number.isFinite(stockfish?.cp)?` · SF ${(stockfish.cp/100).toFixed(2)}`:''}.`;
+  const after=fideGameState(chess,current.positions);if(after.terminal){this.finishTComGame(after.result,after.reason);return}
+  if(after.claimable)lab.progress=`${lab.progress} Tablas reclamables por ${after.claims.join(' y ')}.`;
+  if(chess.history().length>=lab.maxPlies){this.finishTComGame('1/2-1/2',`límite de ${lab.maxPlies} semijugadas`);return}
+  this.updateTComLive(true);this.tcomQueueAutoReply();
+ }
+ undoTComPlayableMove(){const lab=this.ensureTComLab(),current=lab.current;if(!current||lab.running||lab.manualThinking)return;const control=lab.boardControl;let move=current.chess.undo();if(!move)return;if((control==='w'||control==='b')&&current.chess.history().length&&current.chess.turn()!==control)current.chess.undo();const plies=current.chess.history().length;current.positions=current.positions.slice(0,plies+1);current.decisions=(current.decisions||[]).filter(decision=>decision.ply<=plies);const previous=current.chess.history({verbose:true}).at(-1);current.lastMove=previous?[previous.from,previous.to]:null;current.lastDecision=null;lab.boardSelected=null;lab.boardLegal=[];lab.progress='Se deshizo la última jugada del tablero jugable.';this.renderTComLab()}
+ tcomBoardHtml(){const lab=this.ensureTComLab(),chess=lab.current?.chess||new Chess();const previousFlip=this.boardFlipped,previousSelected=this.selected,previousLegal=this.legal,previousLast=this.lastMove;this.boardFlipped=Boolean(lab.current?.manualGame&&lab.boardControl==='b');this.selected=lab.boardSelected;this.legal=lab.boardLegal;this.lastMove=lab.current?.lastMove||null;const board=this.boardHtml(chess,this.tcomBoardInteractive());this.boardFlipped=previousFlip;this.selected=previousSelected;this.legal=previousLegal;this.lastMove=previousLast;return board}
+ renderTComLab(){
+  const lab=this.ensureTComLab(),stats=this.tcomStats(),current=lab.current,v=$('#view');
+  const moveTail=this.tcomMoveTailHtml(current?.chess,24);
+  const candidates=(current?.lastDecision?.candidates||[]).slice(0,8).map((candidate,index)=>`<tr><td>${index+1}</td><td>${esc(candidate.san||candidate.uci)}</td><td>${formatNumber(candidate.score,5)}</td><td>${formatNumber(candidate.rawScore,5)}</td></tr>`).join('');
+  const canUndo=Boolean(current?.chess?.history?.().length)&&!lab.running&&!lab.manualThinking;
+  v.innerHTML=`<section class="transform-page-head"><button data-tcom-back>← Inicio</button><div><small>LABORATORIO DE MOTORES SIMBÓLICOS</small><h1>T-COM vs T-COM</h1></div><div class="transform-head-actions"><button data-tcom-start class="primary" ${lab.running?'disabled':''}>▶ Iniciar ${lab.gamesTarget} partidas</button><button data-tcom-pause ${lab.running?'':'disabled'}>${lab.paused?'▶ Reanudar':'⏸ Pausar'}</button><button data-tcom-stop ${lab.running?'':'disabled'}>■ Detener</button><button data-tcom-new-playable ${lab.running?'disabled':''}>♟ Nueva partida jugable</button></div></section>
+  <section class="tcom-layout"><aside class="tcom-config-column">${this.tcomModuleEditorHtml('white',lab.white)}${this.tcomModuleEditorHtml('black',lab.black)}<details class="transform-card" open><summary>Control del tablero <span>Jugar</span></summary><div class="transform-card-body tcom-play-settings"><label>Quién mueve manualmente<select data-tcom-board-control>${this.tcomBoardControlOptions(lab.boardControl)}</select></label><label class="toggle"><input data-tcom-auto-reply type="checkbox" ${lab.autoReply?'checked':''}><span>Respuesta automática del módulo rival</span></label><small>En una partida jugable puedes tocar o arrastrar las piezas. El módulo del bando contrario responde con su transformación de una sola semijugada, sin calcular variantes.</small></div></details><details class="transform-card"><summary>Configuración del torneo <span>＋</span></summary><div class="transform-card-body tcom-settings"><label>Partidas<input data-tcom-setting="gamesTarget" type="number" min="1" max="1000" value="${lab.gamesTarget}"></label><label>Máximo de semijugadas<input data-tcom-setting="maxPlies" type="number" min="20" max="600" value="${lab.maxPlies}"></label><label>Diversidad entre empates (%)<input data-tcom-setting="diversity" type="number" min="0" max="50" value="${lab.diversity}"></label><label>Semijugadas iniciales de apertura<input data-tcom-setting="openingPlies" type="number" min="0" max="16" value="${lab.openingPlies}"></label><label>Velocidad de las partidas<select data-tcom-setting="speed">${this.tcomSpeedOptions(lab.speed)}</select></label><label>Pausa base por semijugada (ms)<input data-tcom-setting="delay" type="number" min="0" max="1000" value="${lab.delay}"></label><label>Profundidad Stockfish rival<input data-tcom-setting="stockfishDepth" type="number" min="1" max="24" value="${lab.stockfishDepth}"></label><label>Nodos SF para anotaciones<input data-tcom-setting="stockfishEvalNodes" type="number" min="200" max="50000" step="200" value="${lab.stockfishEvalNodes}"></label><label class="toggle"><input data-tcom-setting="annotateStockfish" type="checkbox" ${lab.annotateStockfish?'checked':''}><span>Anotar cada semijugada con evaluación de Stockfish</span></label><label class="toggle"><input data-tcom-setting="alternateColors" type="checkbox" ${lab.alternateColors?'checked':''}><span>Alternar módulos de color</span></label><label class="toggle"><input data-tcom-setting="saveGames" type="checkbox" ${lab.saveGames?'checked':''}><span>Guardar partidas en biblioteca</span></label></div></details></aside>
+  <main class="tcom-board-column"><section class="transform-card-static tcom-board-card"><header><div><small id="tcomGameLabel">${current?`Partida ${current.number}${current.manualGame?' · tablero jugable':`/${lab.gamesTarget}`} · ${esc(current.openingName)}`:'Vista previa'}</small><h2 id="tcomTurnLabel">${esc(this.tcomTurnText())}</h2></div><span class="tcom-one-ply-badge">${current?.manualGame?'Tablero jugable':'1 ply · sin variantes'}</span></header><div class="transform-board-shell"><div class="board-wrap" style="${this.customBoardStyle()}"><div class="board" id="tcomBoard">${this.tcomBoardHtml()}</div></div></div><div class="tcom-play-controls"><button data-tcom-new-playable ${lab.running?'disabled':''}>Nueva partida</button><button data-tcom-undo ${canUndo?'':'disabled'}>↶ Deshacer turno</button><button data-tcom-step ${lab.running||lab.manualThinking?'disabled':''}>▶ Mover módulo actual</button><span>${this.tcomBoardInteractive()?'Tablero activo: mueve por clic o arrastre.':lab.manualThinking?'El módulo está calculando…':'Selecciona un control manual y crea una partida jugable.'}</span></div><div class="tcom-moves" id="tcomMoves">${moveTail||'<span>Sin jugadas todavía.</span>'}</div><div class="transform-status ${lab.running||lab.manualThinking?'busy':''}" id="tcomProgress">${esc(lab.progress)}</div></section><details class="transform-card" open><summary>Última decisión del módulo <span>Top 8</span></summary><div class="transform-card-body tcom-candidate-wrap"><table><thead><tr><th>#</th><th>Semijugada</th><th>Puntuación estable</th><th>Valor bruto</th></tr></thead><tbody id="tcomCandidates">${candidates||'<tr><td colspan="4">Todavía no hay una decisión automática.</td></tr>'}</tbody></table></div></details></main>
+  <aside class="tcom-results-column"><details class="transform-card" open><summary>Resumen de la serie <span>${stats.total}/${lab.gamesTarget}</span></summary><div class="transform-card-body"><div class="tcom-stat-grid"><span><b id="tcomTotal">${stats.total}</b> terminadas</span><span><b id="tcomWhiteWins">${stats.white}</b> victorias blancas</span><span><b id="tcomBlackWins">${stats.black}</b> victorias negras</span><span><b id="tcomDraws">${stats.draw}</b> tablas</span><span><b id="tcomAvg">${formatNumber(stats.avg,1)}</b> semijugadas promedio</span><span><b>${lab.evalCache.size}</b> evaluaciones en caché</span></div><button data-tcom-export ${stats.total?'':'disabled'}>Exportar PGN + CSV detallado</button><button data-tcom-clear ${lab.running?'disabled':''}>Limpiar resultados</button></div></details><details class="transform-card" open><summary>Partidas terminadas <span>⌃</span></summary><div class="transform-card-body tcom-results-list" id="tcomResults">${lab.results.slice(-100).reverse().map(item=>`<article><b>#${item.number} · ${item.result}</b><span>${esc(item.white)} vs ${esc(item.black)}</span><small>${item.plies} semijugadas · ${esc(item.reason)}${Number.isFinite(item.finalStockfish)?` · SF ${(item.finalStockfish/100).toFixed(2)}`:''}</small></article>`).join('')||'<p>No hay partidas terminadas.</p>'}</div></details><details class="transform-card"><summary>Metodología <span>＋</span></summary><div class="transform-card-body"><p>Cada T-COM enumera solo las jugadas legales del turno, crea la matriz de cada posición hija, aplica sus funciones y selecciona el mejor valor. Blancas maximizan; negras minimizan.</p><p>El tablero jugable utiliza exactamente la misma matriz y los mismos módulos que el torneo, pero permite que una persona controle blancas, negras o ambos bandos.</p><p>Las posiciones y transformaciones repetidas se almacenan en una caché LRU para acelerar series largas.</p></div></details></aside></section>`;
+  $('[data-tcom-back]').onclick=()=>{if(lab.running&&!confirm('La serie sigue activa. ¿Detener y salir?'))return;this.stopTComTournament(false);this.screen='home';this.render()};
+  $('[data-tcom-start]').onclick=()=>this.startTComTournament();$('[data-tcom-pause]').onclick=()=>{lab.paused=!lab.paused;lab.progress=lab.paused?'Serie pausada.':'Serie reanudada.';this.updateTComLive(true)};$('[data-tcom-stop]').onclick=()=>this.stopTComTournament();$$('[data-tcom-step]').forEach(button=>button.onclick=()=>this.stepTComOnce());
+  $$('[data-tcom-new-playable]').forEach(button=>button.onclick=()=>{if(lab.boardControl==='off')lab.boardControl='both';this.prepareTComPlayableGame();this.persistTComConfig();this.renderTComLab();this.tcomQueueAutoReply()});$('[data-tcom-undo]').onclick=()=>this.undoTComPlayableMove();
+  $('[data-tcom-board-control]').onchange=event=>{lab.boardControl=event.target.value;lab.boardSelected=null;lab.boardLegal=[];this.persistTComConfig();if(lab.current?.manualGame)this.prepareTComPlayableGame();this.renderTComLab();this.tcomQueueAutoReply()};
+  $('[data-tcom-auto-reply]').onchange=event=>{lab.autoReply=event.target.checked;this.persistTComConfig()};
+  $$('[data-tcom-field],[data-tcom-setting],[data-tcom-expression],[data-tcom-key-side],[data-tcom-add-expression],[data-tcom-delete-expression]').forEach(input=>{input.disabled=lab.running});
+  $$('[data-tcom-field]').forEach(input=>input.onchange=()=>{const [side,key]=input.dataset.tcomField.split('.'),module=lab[side];module[key]=key==='stabilize'?input.checked:input.value;this.persistTComConfig();if(key==='type')this.renderTComLab()});
+  $$('[data-tcom-expression]').forEach(input=>{
+   input.onfocus=()=>{const [side,index]=input.dataset.tcomExpression.split('.');lab.activeEditorSide=side;lab.activeEditorIndex=Number(index)};
+   input.oninput=()=>{const [side,index]=input.dataset.tcomExpression.split('.');lab[side].expressions[Number(index)]=input.value;lab.activeEditorSide=side;lab.activeEditorIndex=Number(index);this.persistTComConfig()};
+  });
+  $$('[data-tcom-key-side]').forEach(button=>button.onclick=()=>this.insertTComKey(button.dataset.tcomKeySide,button.dataset.tcomKey));
+  $$('[data-tcom-add-expression]').forEach(button=>button.onclick=()=>this.addTComExpression(button.dataset.tcomAddExpression));
+  $$('[data-tcom-delete-expression]').forEach(button=>button.onclick=()=>{const [side,index]=button.dataset.tcomDeleteExpression.split('.');this.deleteTComExpression(side,Number(index))});
+  $$('[data-tcom-setting]').forEach(input=>input.onchange=()=>{const key=input.dataset.tcomSetting;lab[key]=input.type==='checkbox'?input.checked:Number(input.value);if(key==='gamesTarget')lab[key]=clamp(lab[key],1,1000);if(key==='maxPlies')lab[key]=clamp(lab[key],20,600);if(key==='speed')lab[key]=[.25,.5,.75,1,1.25,1.5,2].includes(lab[key])?lab[key]:1;if(key==='stockfishEvalNodes')lab[key]=clamp(lab[key],200,50000);this.persistTComConfig()});
+  $('[data-tcom-export]').onclick=()=>this.exportTComResults();$('[data-tcom-clear]').onclick=()=>{lab.results=[];lab.current=null;lab.boardSelected=null;lab.boardLegal=[];lab.evalCache.clear();lab.stockfishEvalCache.clear();lab.progress='Resultados eliminados.';this.renderTComLab()};
+  this.bindTComBoard();
+ }
+ tcomOpening(){
+  const lab=this.ensureTComLab(),plies=lab.openingPlies;
+  const initial=new Chess(),initialPositions=[{fen:initial.fen(),ply:0}];
+  if(!plies)return {chess:initial,name:'Posición inicial',positions:initialPositions};
+  const options=OPENINGS.filter(opening=>opening.moves?.length>=plies&&opening.moves.length<=Math.max(plies+8,16));
+  for(let attempt=0;attempt<30;attempt++){
+   const opening=options[Math.floor(Math.random()*options.length)];if(!opening)break;
+   const chess=new Chess(),positions=[{fen:chess.fen(),ply:0}];let valid=true;
+   for(const san of opening.moves.slice(0,plies)){if(!chess.move(san)){valid=false;break}positions.push({fen:chess.fen(),ply:chess.history().length})}
+   if(valid)return {chess,name:opening.name,positions};
+  }
+  return {chess:initial,name:'Posición inicial',positions:initialPositions}
+ }
+ prepareTComGame(number=1){
+  const lab=this.ensureTComLab(),opening=this.tcomOpening(),baseWhite=lab.seriesModules?.white||lab.white,baseBlack=lab.seriesModules?.black||lab.black,swap=lab.alternateColors&&number%2===0,white=this.cloneTComModule(swap?baseBlack:baseWhite),black=this.cloneTComModule(swap?baseWhite:baseBlack);
+  lab.current={number,chess:opening.chess,openingName:opening.name,white,black,positions:opening.positions.map(position=>({...position})),lastMove:null,lastDecision:null,decisions:[],startedAt:Date.now(),manualGame:false};lab.boardSelected=null;lab.boardLegal=[];lab.manualThinking=false;lab.progress=`Partida ${number}/${lab.gamesTarget}: ${white.name} vs ${black.name}`;return lab.current
+ }
+ async chooseTComSideMove(current,token){const lab=this.ensureTComLab(),color=current.chess.turn(),module=color==='w'?current.white:current.black;if(module.type==='human')throw new Error('Es el turno del jugador en el tablero.');if(module.type==='stockfish'){await this.engine.init();const result=await this.engine.analyse(current.chess.fen(),{depth:lab.stockfishDepth,multiPv:1,skill:20,timeoutMs:90000});const chosen=result?.[0];if(!chosen)throw new Error('Stockfish no devolvió una jugada.');return {chosen:{...chosen,san:chosen.uci,rawScore:chosen.score/100},candidates:result.map(item=>({...item,san:item.uci,rawScore:item.score/100}))}}
+  return chooseTransformMoveOnePly(current.chess,module,{cache:lab.evalCache,diversity:lab.diversity,chunkSize:4,cancelled:()=>lab.token!==token,yieldControl:()=>new Promise(resolve=>setTimeout(resolve,0))}) }
+ async playTComPly(token,options){
+  options=options||{};const render=options.render!==false,lab=this.ensureTComLab(),current=lab.current||this.prepareTComGame(lab.results.length+1);
+  if(lab.token!==token)throw new Error('Cálculo cancelado.');
+  const state=fideGameState(current.chess,current.positions);if(state.terminal)return this.finishTComGame(state.result,state.reason);
+  const decision=await this.chooseTComSideMove(current,token);if(lab.token!==token)return;
+  const move=current.chess.move(uciToMove(decision.chosen.uci));if(!move)throw new Error(`La semijugada ${decision.chosen.uci} no fue legal.`);
+  current.lastMove=[move.from,move.to];current.lastDecision={...decision,module:move.color==='w'?current.white.name:current.black.name};
+  lab.progress=current.manualGame?`${current.lastDecision.module}: ${move.san}. Evaluando posición elegida con Stockfish…`:`Partida ${current.number}/${lab.gamesTarget} · ${current.lastDecision.module}: ${move.san}. Evaluando con Stockfish…`;
+  if(render)this.updateTComLive();
+  const stockfish=await this.tcomStockfishEvaluation(current.chess.fen(),token);if(lab.token!==token)return;
+  current.decisions.push(this.tcomDecisionRecord(current,move,decision,stockfish));
+  current.positions.push({fen:current.chess.fen(),ply:current.chess.history().length,stockfish:Number.isFinite(stockfish?.cp)?stockfish.cp:null});
+  const sfText=Number.isFinite(stockfish?.cp)?` · SF ${(stockfish.cp/100).toFixed(2)}`:stockfish?.error?' · SF no disponible':'';
+  lab.progress=current.manualGame?`${current.lastDecision.module}: ${move.san} · ${decision.candidates.length} candidatas de un ply${sfText}.`:`Partida ${current.number}/${lab.gamesTarget} · ${current.lastDecision.module}: ${move.san} · ${decision.candidates.length} candidatas de un ply${sfText}.`;
+  const after=fideGameState(current.chess,current.positions);if(after.terminal)return this.finishTComGame(after.result,after.reason);
+  if(after.claimable)return this.finishTComGame('1/2-1/2',`tablas reclamables: ${after.claims.join(' y ')}`);
+  if(current.chess.history().length>=lab.maxPlies)return this.finishTComGame('1/2-1/2',`límite de ${lab.maxPlies} semijugadas`);
+  if(render)this.updateTComLive();return null;
+ }
+ finishTComGame(result,reason){
+  const lab=this.ensureTComLab(),current=lab.current;if(!current)return null;
+  current.chess.setHeader?.('Result',result);
+  const decisions=(current.decisions||[]).map(item=>({...item})),finalStockfish=[...decisions].reverse().find(item=>Number.isFinite(item.stockfishCp))?.stockfishCp??null;
+  const item={number:current.number,result,reason,white:current.white.name,black:current.black.name,whiteModule:this.cloneTComModule(current.white),blackModule:this.cloneTComModule(current.black),whiteCriterion:this.tcomModuleCriterion(current.white),blackCriterion:this.tcomModuleCriterion(current.black),plies:current.chess.history().length,pgn:current.chess.pgn(),fen:current.chess.fen(),openingName:current.openingName,durationMs:Date.now()-current.startedAt,decisions,finalStockfish,stockfishAnnotation:lab.annotateStockfish,stockfishEvalNodes:lab.stockfishEvalNodes};
+  lab.results.push(item);
+  if(lab.saveGames&&item.plies>=2){
+   const game={id:crypto.randomUUID?.()||String(Date.now()),date:new Date().toISOString(),mode:'tcom',white:item.white,black:item.black,result:item.result,pgn:this.tcomAnnotatedPgn(item),fen:item.fen,reason:item.reason,openingName:item.openingName,positions:current.positions,decisions:item.decisions,whiteCriterion:item.whiteCriterion,blackCriterion:item.blackCriterion};
+   addGame(this.db,game);saveDb(this.db);
+  }
+  lab.progress=`Partida ${item.number} terminada: ${item.result} · ${item.reason}`;lab.current=null;lab.boardSelected=null;lab.boardLegal=[];lab.manualThinking=false;this.updateTComLive(true);return item;
+ }
+ tcomPgnSafe(value){return String(value??'').replace(/["\\\r\n]/g,character=>character==='"'?"'":character==='\\'?'/' :' ')}
+ tcomCommentSafe(value){return String(value??'').replace(/[{}\r\n]/g,' ').replace(/\s+/g,' ').trim()}
+ tcomStockfishText(decision){if(Number.isFinite(decision?.stockfishMate))return `#${decision.stockfishMate}`;if(Number.isFinite(decision?.stockfishCp))return `${decision.stockfishCp>=0?'+':''}${(decision.stockfishCp/100).toFixed(2)}`;return 'N/D'}
+ tcomAnnotatedPgn(item){
+  const history=[];try{const chess=new Chess();if(item.pgn)chess.loadPgn(item.pgn);history.push(...chess.history())}catch{/* Conserva una exportación parcial si un PGN antiguo falla. */}
+  const decisionByPly=new Map((item.decisions||[]).map(decision=>[decision.ply,decision])),tokens=[];
+  history.forEach((san,index)=>{const ply=index+1,moveNumber=Math.floor(index/2)+1,decision=decisionByPly.get(ply);if(index%2===0)tokens.push(`${moveNumber}.`);tokens.push(san);if(decision){const comment=`criterio=${decision.criterion}; score=${formatNumber(decision.score,6)}; bruto=${formatNumber(decision.rawScore,6)}; Stockfish=${this.tcomStockfishText(decision)}`;tokens.push(`{${this.tcomCommentSafe(comment)}}`)}});
+  tokens.push(item.result||'*');
+  return `[Event "T-COM vs T-COM"]
+[Round "${item.number}"]
+[White "${this.tcomPgnSafe(item.white)}"]
+[Black "${this.tcomPgnSafe(item.black)}"]
+[Result "${item.result||'*'}"]
+[Opening "${this.tcomPgnSafe(item.openingName)}"]
+[WhiteCriterion "${this.tcomPgnSafe(item.whiteCriterion)}"]
+[BlackCriterion "${this.tcomPgnSafe(item.blackCriterion)}"]
+[StockfishAnnotation "${item.stockfishAnnotation?`${item.stockfishEvalNodes} nodes por posición`:'desactivada'}"]
+
+${tokens.join(' ')}`;
+ }
+ async startTComTournament(){const lab=this.ensureTComLab();if(lab.running)return;lab.results=[];lab.evalCache.clear();lab.stockfishEvalCache.clear();lab.seriesModules={white:this.cloneTComModule(lab.white),black:this.cloneTComModule(lab.black)};lab.running=true;lab.paused=false;lab.manualThinking=false;lab.boardSelected=null;lab.boardLegal=[];lab.lastError='';lab.seriesStartedAt=Date.now();const token=crypto.randomUUID?.()||String(Date.now());lab.token=token;this.prepareTComGame(1);this.renderTComLab();try{for(let gameNumber=1;gameNumber<=lab.gamesTarget&&lab.token===token;gameNumber++){if(!lab.current)this.prepareTComGame(gameNumber);while(lab.current&&lab.token===token){while(lab.paused&&lab.token===token)await new Promise(resolve=>setTimeout(resolve,100));if(lab.token!==token)break;const ply=lab.current.chess.history().length;const effectiveDelay=this.tcomEffectiveDelay();await this.playTComPly(token,{render:effectiveDelay>=30||ply%4===0});await new Promise(resolve=>setTimeout(resolve,effectiveDelay))}if(lab.token===token&&gameNumber%10===0){this.engine.clearHash?.();await new Promise(resolve=>setTimeout(resolve,0))}}if(lab.token===token)lab.progress=`Serie completada: ${lab.results.length} partidas.`}catch(error){if(lab.token===token){lab.lastError=error.message;lab.progress=`Serie detenida: ${error.message}`}}finally{if(lab.token===token){lab.running=false;lab.paused=false;lab.token=null;lab.seriesModules=null;this.updateTComLive(true)}} }
+ stopTComTournament(render=true){const lab=this.ensureTComLab();lab.token=null;lab.running=false;lab.paused=false;lab.manualThinking=false;lab.seriesModules=null;this.engine.stop?.();lab.progress='Serie detenida por el usuario.';if(render&&this.screen==='tcomLab')this.renderTComLab()}
+ async stepTComOnce(options){options=options||{};const auto=Boolean(options.auto),lab=this.ensureTComLab();if(lab.running||lab.manualThinking)return;if(!lab.current){if(auto)return;this.prepareTComPlayableGame()}const module=this.tcomTurnModule();if(module?.type==='human'){lab.progress='Es el turno del jugador: mueve una pieza en el tablero.';this.renderTComLab();return}const token=crypto.randomUUID?.()||String(Date.now());lab.token=token;lab.manualThinking=true;this.updateTComLive(true);try{await this.playTComPly(token,{render:false})}catch(error){lab.progress=`No se pudo avanzar: ${error.message}`}finally{if(lab.token===token)lab.token=null;lab.manualThinking=false;if(this.screen==='tcomLab')this.renderTComLab()}}
+ updateTComLive(force=false){if(this.screen!=='tcomLab')return;const lab=this.ensureTComLab(),current=lab.current,stats=this.tcomStats();if(force){this.renderTComLab();return}const board=$('#tcomBoard');if(board){board.innerHTML=this.tcomBoardHtml();this.bindTComBoard()}const gameLabel=$('#tcomGameLabel');if(gameLabel)gameLabel.textContent=current?`Partida ${current.number}${current.manualGame?' · tablero jugable':`/${lab.gamesTarget}`} · ${current.openingName}`:'Serie';const turn=$('#tcomTurnLabel');if(turn)turn.textContent=this.tcomTurnText();const moves=$('#tcomMoves');if(moves)moves.innerHTML=this.tcomMoveTailHtml(current?.chess,24)||'<span>Sin jugadas todavía.</span>';const progress=$('#tcomProgress');if(progress)progress.textContent=lab.progress;const candidates=$('#tcomCandidates');if(candidates)candidates.innerHTML=(current?.lastDecision?.candidates||[]).slice(0,8).map((candidate,index)=>`<tr><td>${index+1}</td><td>${esc(candidate.san||candidate.uci)}</td><td>${formatNumber(candidate.score,5)}</td><td>${formatNumber(candidate.rawScore,5)}</td></tr>`).join('')||'<tr><td colspan="4">Todavía no hay una decisión automática.</td></tr>';const set=(id,value)=>{const el=$(id);if(el)el.textContent=value};set('#tcomTotal',stats.total);set('#tcomWhiteWins',stats.white);set('#tcomBlackWins',stats.black);set('#tcomDraws',stats.draw);set('#tcomAvg',formatNumber(stats.avg,1)) }
+ exportTComResults(){
+  const lab=this.ensureTComLab();if(!lab.results.length)return;
+  const quoted=value=>`"${String(value??'').replace(/"/g,'""')}"`;
+  const pgn=lab.results.map(item=>this.tcomAnnotatedPgn(item)).join('\n\n');
+  downloadText(`T-COM-serie-${lab.results.length}-anotada.pgn`,pgn,'application/x-chess-pgn');
+  const summaryHeader=['partida','blancas','negras','resultado','semijugadas','motivo','apertura','criterio_blancas','criterio_negras','stockfish_final'];
+  const summary=[summaryHeader.join(','),...lab.results.map(item=>[item.number,item.white,item.black,item.result,item.plies,item.reason,item.openingName,item.whiteCriterion,item.blackCriterion,Number.isFinite(item.finalStockfish)?item.finalStockfish/100:''].map(quoted).join(','))].join('\n');
+  const detailHeader=['partida','semijugada','color','san','uci','modulo','tipo','criterio_seleccion','reductor','estabilizado','puntuacion_estable','valor_bruto','stockfish_peones','stockfish_mate','error_stockfish'];
+  const detailRows=lab.results.flatMap(item=>(item.decisions||[]).map(decision=>[item.number,decision.ply,decision.color,decision.san,decision.uci,decision.moduleName,decision.moduleType,decision.criterion,decision.reducer,decision.stabilize,decision.score,decision.rawScore,Number.isFinite(decision.stockfishCp)?decision.stockfishCp/100:'',Number.isFinite(decision.stockfishMate)?decision.stockfishMate:'',decision.stockfishError||''].map(quoted).join(',')));
+  const detail=[detailHeader.join(','),...detailRows].join('\n');
+  setTimeout(()=>downloadText(`T-COM-serie-${lab.results.length}-resumen.csv`,summary,'text/csv'),250);
+  setTimeout(()=>downloadText(`T-COM-serie-${lab.results.length}-decisiones.csv`,detail,'text/csv'),500);
+ }
+
+
+ ensureTransformLab(){
+  if(this.transformLab)return this.transformLab;
+  const saved=this.db.settings.transformLabConfig||{},savedVisibility=saved.visibility||saved.metricVisibility||{};
+  const expressions=Array.isArray(saved.expressions)&&saved.expressions.length?saved.expressions:[
+   'f(a)=sin(a)+ln(1+abs(a))',
+   'F(A)=A^2+exp(A)',
+   'K(A,a)=F(A)+f(a)',
+  ];
+  this.transformLab={
+   sheets:[],selectedId:null,ply:0,busy:false,progress:'',analysisToken:null,
+   expressions,
+   visibility:{
+    stockfish:true,output:true,determinant:true,rank:true,trace:true,frobenius:true,
+    condition:true,pseudoDeterminant:true,lambdaMax:true,sigmaMinPositive:true,
+    ...savedVisibility,
+   },
+   graphMode:saved.graphMode||'semimove',normalized:saved.normalized!==false,depth:Number(saved.depth||8),batchNodes:clamp(Number(saved.batchNodes||12000),1000,100000),
+   graph:{xMin:0,xMax:40,yMin:-20,yMax:20},
+   activeExpression:clamp(Number(saved.activeExpression||0),0,Math.max(0,expressions.length-1)),
+   activeGraphFunction:clamp(Number(saved.activeGraphFunction||0),0,Math.max(0,expressions.length-1)),
+   applicationTarget:saved.applicationTarget==='A'?'A':'a',
+   drag:null,cacheRevision:0,stockfishRevision:0,rawSeriesCache:null,graphSeriesCache:null,drawFrame:null,drawRetry:null,continuousCache:null,
+   functionAnalysisToken:null,functionAnalysisProgress:'',compiledDefinitionsCache:null,
+   boardSelected:null,boardLegal:[],boardLastMove:null,
+   liveAuto:saved.liveAuto!==false,liveMultiPv:clamp(Number(saved.liveMultiPv||3),1,5),
+   liveCandidates:[],liveAnalysisFen:'',liveBusy:false,liveError:'',liveToken:null,liveTimer:null,
+  };
+  const storedGames=(this.db.games||[]).filter(game=>game.pgn).slice(0,500);
+  for(const game of storedGames){try{const sheet=buildTimelineFromPgn(game.pgn,`${game.white||'Blancas'} vs ${game.black||'Negras'}`);sheet.source='biblioteca';this.transformLab.sheets.push(sheet)}catch{/* Se omite un PGN antiguo no compatible. */}}
+  if(!this.transformLab.sheets.length){const sheet=buildTimelineFromPgn('', 'Hoja 001 · Posición inicial');sheet.source='nuevo';this.transformLab.sheets.push(sheet)}
+  this.transformLab.selectedId=this.transformLab.sheets[0].id;
+  return this.transformLab;
+ }
+ persistTransformConfig(){
+  const lab=this.ensureTransformLab();
+  this.db.settings.transformLabConfig={
+   expressions:[...lab.expressions],visibility:{...lab.visibility},graphMode:lab.graphMode,
+   normalized:lab.normalized,depth:lab.depth,batchNodes:lab.batchNodes,
+   activeExpression:lab.activeExpression,activeGraphFunction:lab.activeGraphFunction,
+   applicationTarget:lab.applicationTarget,liveAuto:lab.liveAuto,liveMultiPv:lab.liveMultiPv,
+  };
+  saveDb(this.db);
+ }
+ invalidateTransformGraphCache(){
+  const lab=this.ensureTransformLab();
+  lab.cacheRevision=(lab.cacheRevision||0)+1;
+  lab.stockfishRevision=(lab.stockfishRevision||0)+1;
+  lab.rawSeriesCache=null;lab.graphSeriesCache=null;lab.continuousCache=null;
+  lab.compiledDefinitionsCache=null;lab.functionAnalysisToken=null;lab.functionAnalysisProgress='';
+ }
+ invalidateTransformStockfishSeries(){const lab=this.ensureTransformLab();lab.stockfishRevision=(lab.stockfishRevision||0)+1;lab.rawSeriesCache=null;lab.graphSeriesCache=null}
+ disposeTransformGraphBinding(){
+  const lab=this.transformLab;if(!lab)return;
+  lab.graphResizeObserver?.disconnect?.();lab.graphResizeObserver=null;
+  if(lab.graphResizeFallback){window.removeEventListener?.('resize',lab.graphResizeFallback);lab.graphResizeFallback=null}
+  if(lab.drawFrame){globalThis.cancelAnimationFrame?.(lab.drawFrame);lab.drawFrame=null}
+  if(lab.drawRetry){clearTimeout(lab.drawRetry);lab.drawRetry=null}
+  if(this.screen!=='stockfishGraph')lab.functionAnalysisToken=null;
+  lab.drag=null;
+ }
+ disposeTransformLiveAnalysis(){
+  const lab=this.transformLab;if(!lab)return;
+  if(lab.liveTimer){clearTimeout(lab.liveTimer);lab.liveTimer=null}
+  if(lab.liveBusy){lab.liveToken=null;lab.liveBusy=false;try{this.engine.stop?.()}catch{/* Motor ya detenido. */}}
+ }
+ scheduleTransformGraphDraw(){const lab=this.ensureTransformLab();if(lab.drawFrame)return;const raf=globalThis.requestAnimationFrame||((callback)=>setTimeout(callback,16));lab.drawFrame=raf(()=>{lab.drawFrame=null;if(this.screen==='stockfishGraph')this.drawTransformGraph()})}
+ activeTransformSheet(){const lab=this.ensureTransformLab();return lab.sheets.find(sheet=>sheet.id===lab.selectedId)||lab.sheets[0]}
+ activeTransformPosition(){const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet();lab.ply=clamp(lab.ply,0,Math.max(0,sheet.positions.length-1));return sheet.positions[lab.ply]}
+ transformPositionData(position=this.activeTransformPosition()){
+  if(!position.algebra){const built=buildPositionMatrix(position.fen),properties=algebraicProperties(built.matrix);position.algebra={...built,properties}}
+  return position.algebra;
+ }
+ transformExpressionInfo(expression,index=0){
+  const match=String(expression||'').match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*=\s*(.*)$/);
+  const name=match?.[1]||`f${index+1}`,params=(match?.[2]||'').split(',').map(value=>value.trim()).filter(Boolean),body=match?.[3]||'';
+  const hasScalar=params.some(param=>param&&param[0]===param[0].toLowerCase()),hasMatrix=params.some(param=>param&&param[0]===param[0].toUpperCase());
+  const target=hasScalar&&hasMatrix?'a+A':hasMatrix?'A':'a';
+  return {index,name,params,body,target,label:`${name}(${params.join(',')||target})`};
+ }
+ transformFunctionTabsHtml(){
+  const lab=this.ensureTransformLab();
+  return lab.expressions.map((expression,index)=>{const info=this.transformExpressionInfo(expression,index);return `<button type="button" data-transform-function-tab="${index}" class="${index===lab.activeGraphFunction?'active':''}" title="${esc(expression)}"><b>${esc(info.label)}</b><span>${info.target==='a'?'valores':info.target==='A'?'matriz':'mixta'}</span></button>`}).join('');
+ }
+ setTransformApplicationTarget(target,{insert=false}={}){
+  const lab=this.ensureTransformLab();lab.applicationTarget=target==='A'?'A':'a';this.persistTransformConfig();
+  if(insert)this.insertTransformKey(lab.applicationTarget);
+ }
+ transformFunctionCache(position,signature){
+  if(position.transformFunctionCache?.signature!==signature)position.transformFunctionCache={signature,byIndex:{}};
+  return position.transformFunctionCache;
+ }
+ transformSheetGroupsHtml(){
+  const lab=this.ensureTransformLab(),sheets=lab.sheets;
+  if(!sheets.length)return '<p class="transform-empty">No hay hojas.</p>';
+  const tenGroups=[];
+  for(let start=0;start<sheets.length;start+=10)tenGroups.push({start,items:sheets.slice(start,start+10)});
+  const hundredGroups=[];
+  for(let start=0;start<tenGroups.length;start+=10)hundredGroups.push({start:start*10,tens:tenGroups.slice(start,start+10)});
+  const thousandGroups=[];
+  for(let start=0;start<hundredGroups.length;start+=10)thousandGroups.push({start:start*100,hundreds:hundredGroups.slice(start,start+10)});
+  let html='';
+  thousandGroups.forEach((thousand,ti)=>{
+   const thousandCount=thousand.hundreds.reduce((sum,hundred)=>sum+hundred.tens.reduce((sub,ten)=>sub+ten.items.length,0),0);
+   html+=`<details class="transform-tree-level" ${ti===0?'open':''}><summary><span>▣ ${thousand.start+1}-${thousand.start+1000}</span><b>${thousandCount}</b></summary>`;
+   thousand.hundreds.forEach((hundred,hi)=>{
+    const hundredCount=hundred.tens.reduce((sum,ten)=>sum+ten.items.length,0);
+    html+=`<details ${ti===0&&hi===0?'open':''}><summary><span>▤ ${hundred.start+1}-${hundred.start+100}</span><b>${hundredCount}</b></summary>`;
+    hundred.tens.forEach((ten,di)=>{
+     html+=`<details ${ti===0&&hi===0&&di===0?'open':''}><summary><span>📁 ${ten.start+1}-${ten.start+10}</span><b>${ten.items.length}</b></summary><div class="transform-sheet-list">`;
+     ten.items.forEach((sheet,offset)=>{const index=ten.start+offset,displayName=sheet.name||('Hoja '+String(index+1).padStart(3,'0'));html+=`<button data-transform-sheet="${sheet.id}" class="${sheet.id===lab.selectedId?'active':''}"><span>${sheet.source==='png'?'🖼':'♟'} ${esc(displayName)}</span><small>${sheet.positions.length-1} semijugadas</small></button>`});
+     html+='</div></details>';
+    });
+    html+='</details>';
+   });
+   html+='</details>';
+  });
+  return html;
+ }
+ transformMatrixHtml(matrix){return `<div class="transform-matrix" aria-label="Matriz A de 8 por 8">${matrix.map(row=>`<div>${row.map(value=>`<span>${formatNumber(value,2)}</span>`).join('')}</div>`).join('')}</div>`}
+ transformMoveStripHtml(sheet,ply){
+  const start=Math.max(0,ply-5),end=Math.min(sheet.positions.length,ply+6);
+  return sheet.positions.slice(start,end).map((position,index)=>{const absolute=start+index;return `<button data-transform-ply="${absolute}" class="${absolute===ply?'active':''}" title="${esc(position.san||position.label)}"><b>${position.label}</b><span>${esc(position.san||'')}</span></button>`}).join('');
+ }
+ transformLiveCandidatesHtml(position){
+  const lab=this.ensureTransformLab(),ready=lab.liveAnalysisFen===position.fen,candidates=ready?lab.liveCandidates:[];
+  if(lab.liveBusy&&!candidates.length)return '<div class="transform-live-loading"><i></i><span>Stockfish está analizando la posición…</span></div>';
+  if(lab.liveError&&!candidates.length)return `<p class="transform-live-error">${esc(lab.liveError)}</p>`;
+  if(!candidates.length)return '<p class="transform-live-empty">Las mejores jugadas aparecerán automáticamente.</p>';
+  return candidates.map((candidate,index)=>`<article><span>${index+1}</span><div><b>${esc(candidate.san||candidate.uci)}</b><small>${esc((candidate.variation||[]).slice(0,10).join(' '))||'Sin variante'}</small></div><strong>${scoreText(candidate)}</strong></article>`).join('');
+ }
+ transformLiveScore(position){
+  const lab=this.ensureTransformLab(),candidate=lab.liveAnalysisFen===position.fen?lab.liveCandidates[0]:null;
+  if(candidate)return scoreText(candidate);
+  if(Number.isFinite(position.stockfish))return `${position.stockfish>=0?'+':''}${(position.stockfish/100).toFixed(2)}`;
+  return lab.liveBusy?'…':'Sin analizar';
+ }
+ resetTransformLiveState(keepLastMove=false){
+  const lab=this.ensureTransformLab();if(lab.liveTimer){clearTimeout(lab.liveTimer);lab.liveTimer=null}lab.liveToken=null;lab.liveBusy=false;lab.liveCandidates=[];lab.liveAnalysisFen='';lab.liveError='';lab.boardSelected=null;lab.boardLegal=[];if(!keepLastMove)lab.boardLastMove=null;
+ }
+ scheduleTransformLiveAnalysis(delay=90){
+  const lab=this.ensureTransformLab();if(!lab.liveAuto||this.screen!=='stockfishTransform'||lab.busy)return;
+  const position=this.activeTransformPosition();if(!position||lab.liveBusy||lab.liveAnalysisFen===position.fen)return;
+  if(lab.liveTimer)clearTimeout(lab.liveTimer);lab.liveTimer=setTimeout(()=>{lab.liveTimer=null;this.runTransformLiveAnalysis()},delay);
+ }
+ async runTransformLiveAnalysis(){
+  const lab=this.ensureTransformLab(),position=this.activeTransformPosition();if(!position||lab.liveBusy||lab.busy)return;
+  const fen=position.fen,token=crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;lab.liveToken=token;lab.liveBusy=true;lab.liveError='';
+  if(this.screen==='stockfishTransform')this.renderStockfishTransform();
+  try{
+   await this.engine.init();
+   const raw=await this.engine.analyse(fen,{depth:lab.depth,multiPv:lab.liveMultiPv,skill:20,timeoutMs:90000});
+   if(lab.liveToken!==token||this.screen!=='stockfishTransform'||this.activeTransformPosition()?.fen!==fen)return;
+   lab.liveCandidates=(raw||[]).map((candidate,index)=>{const test=new Chess(fen),move=test.move(uciToMove(candidate.uci));return {...candidate,rank:index+1,san:move?.san||candidate.uci}});
+   const score=lab.liveCandidates[0]?.score;position.stockfish=Number.isFinite(score)?score:position.stockfish;lab.liveAnalysisFen=fen;this.invalidateTransformStockfishSeries();
+  }catch(error){if(lab.liveToken===token)lab.liveError=error.message||'No se pudo analizar la posición.'}
+  finally{if(lab.liveToken===token){lab.liveToken=null;lab.liveBusy=false;if(this.screen==='stockfishTransform')this.renderStockfishTransform()}}
+ }
+ async playTransformManualMove(from,to){
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet(),position=this.activeTransformPosition(),chess=new Chess(position.fen);
+  const legal=chess.moves({square:from,verbose:true}).find(move=>move.to===to);if(!legal)return;let promotion='q';if(legal.promotion)promotion=await this.choosePromotion();const played=chess.move({from,to,promotion});if(!played)return;
+  sheet.positions=sheet.positions.slice(0,lab.ply+1);const parts=position.fen.split(' '),fullMove=Math.max(1,Number(parts[5]||1)),label=parts[1]==='b'?`${fullMove}n`:`${fullMove}b`;
+  sheet.positions.push({fen:chess.fen(),san:played.san,ply:sheet.positions.length,label,stockfish:null});sheet.pgn='';sheet.source=sheet.source==='nuevo'?'manual':sheet.source;lab.ply=sheet.positions.length-1;
+  lab.boardSelected=null;lab.boardLegal=[];lab.boardLastMove=[played.from,played.to];lab.liveCandidates=[];lab.liveAnalysisFen='';lab.liveError='';this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform();this.scheduleTransformLiveAnalysis(30);
+ }
+ undoTransformManualMove(){
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet();if(lab.ply<=0)return;
+  if(lab.ply===sheet.positions.length-1)sheet.positions=sheet.positions.slice(0,-1);lab.ply=Math.max(0,lab.ply-1);lab.boardSelected=null;lab.boardLegal=[];lab.boardLastMove=null;lab.liveCandidates=[];lab.liveAnalysisFen='';lab.liveError='';this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform();this.scheduleTransformLiveAnalysis(30);
+ }
+ bindTransformLiveBoard(){
+  const board=$('#transformLiveBoard'),lab=this.ensureTransformLab(),position=this.activeTransformPosition();if(!board||!position)return;const chess=new Chess(position.fen);this.bindKeyboardBoard(board);board.oncontextmenu=event=>event.preventDefault();
+  const play=(from,to)=>this.playTransformManualMove(from,to);
+  $$('[data-square]',board).forEach(square=>{
+   square.onclick=()=>{if(Date.now()<(this.suppress||0))return;const sq=square.dataset.square;if(lab.boardSelected&&lab.boardLegal.includes(sq)){play(lab.boardSelected,sq);return}const piece=chess.get(sq);if(piece?.color===chess.turn()){lab.boardSelected=sq;lab.boardLegal=chess.moves({square:sq,verbose:true}).map(move=>move.to)}else{lab.boardSelected=null;lab.boardLegal=[]}this.renderStockfishTransform()};
+   square.onpointerdown=event=>this.startVisualDrag(event,square.dataset.square,'transform',chess);square.onpointermove=event=>this.dragMove(event);square.onpointerup=event=>this.endVisualDrag(event,play);square.onpointercancel=event=>this.endVisualDrag(event,play);
+  });
+ }
+ renderStockfishTransform(){
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet(),position=this.activeTransformPosition(),data=this.transformPositionData(position),p=data.properties,v=$('#view');
+  const preview=sheet.imageUrl?`<details class="transform-reference"><summary>Imagen PNG de referencia</summary><img src="${sheet.imageUrl}" alt="Posición importada como PNG"><p>La imagen queda adjunta como referencia. La matriz usa el FEN indicado debajo del tablero.</p></details>`:'';
+  const sf=position.stockfish==null?'Sin analizar':`${position.stockfish>=0?'+':''}${(position.stockfish/100).toFixed(2)}`,liveScore=this.transformLiveScore(position),liveCandidates=this.transformLiveCandidatesHtml(position);
+  const previousFlip=this.boardFlipped,previousSelected=this.selected,previousLegal=this.legal,previousLast=this.lastMove;this.boardFlipped=false;this.selected=lab.boardSelected;this.legal=lab.boardLegal;this.lastMove=lab.boardLastMove;const board=this.boardHtml(new Chess(position.fen),false);this.boardFlipped=previousFlip;this.selected=previousSelected;this.legal=previousLegal;this.lastMove=previousLast;
+  v.innerHTML=`<section class="transform-page-head"><button data-back>← Inicio</button><div><small>LABORATORIO ALGEBRAICO</small><h1>Transformada de Stockfish</h1></div><div class="transform-head-actions"><button data-transform-new>＋ Nueva hoja</button><button data-transform-current-analysis ${lab.busy?'disabled':''}>${lab.busy?'Calculando…':'Analizar posición'}</button><label>Profundidad<input data-transform-depth type="number" min="4" max="32" value="${lab.depth}"></label></div></section>
+  <section class="transform-summary-layout">
+   <aside class="transform-left-column">
+    <details class="transform-card" open><summary>Hojas e importaciones <span>${lab.sheets.length}</span></summary><div class="transform-card-body"><div class="transform-tree">${this.transformSheetGroupsHtml()}</div></div></details>
+    <details class="transform-card" open><summary>Importar <span>＋</span></summary><div class="transform-card-body transform-imports"><label class="file-button">Importar PNG<input data-transform-png type="file" accept="image/png,image/jpeg"></label><label class="file-button">Importar PGN / base<input data-transform-pgn type="file" multiple accept=".pgn,.txt,application/x-chess-pgn,text/plain"></label><label>Crear hoja desde FEN<input data-transform-fen placeholder="Pega un FEN válido"><button data-transform-add-fen>Crear hoja</button></label><small>Cada partida de una base PGN crea una hoja independiente. Los PNG se adjuntan como referencia y pueden asociarse a un FEN.</small></div></details>
+   </aside>
+   <main class="transform-board-card transform-card-static"><header><div><small>${esc(sheet.name)}</small><h2>Tablero jugable · ${position.label} ${esc(position.san||'')}</h2></div><div class="transform-board-header-actions"><span class="transform-live-badge">● Stockfish en vivo</span><button data-transform-delete-sheet title="Eliminar hoja">🗑</button></div></header><div class="transform-board-shell"><div class="board-wrap" style="${this.customBoardStyle()}"><div class="board" id="transformLiveBoard">${board}</div></div></div>${preview}<div class="transform-board-playbar"><button data-transform-undo ${lab.ply<=0?'disabled':''}>↶ Deshacer</button><button data-transform-live-analyse ${lab.liveBusy?'disabled':''}>${lab.liveBusy?'Analizando…':'Analizar ahora'}</button><span>Mueve por clic o arrastre. Si juegas desde una semijugada anterior, se crea una nueva rama desde ese punto.</span></div><div class="transform-fen-row"><input data-transform-current-fen value="${esc(position.fen)}" aria-label="FEN de la posición"><button data-transform-apply-fen>Aplicar FEN</button></div><div class="transform-ply-nav"><button data-transform-prev ${lab.ply<=0?'disabled':''}>|‹</button><button data-transform-prev-one ${lab.ply<=0?'disabled':''}>‹</button><div class="transform-move-strip">${this.transformMoveStripHtml(sheet,lab.ply)}</div><button data-transform-next-one ${lab.ply>=sheet.positions.length-1?'disabled':''}>›</button><button data-transform-next ${lab.ply>=sheet.positions.length-1?'disabled':''}>›|</button></div></main>
+   <aside class="transform-right-column"><details class="transform-card" open><summary>Stockfish en tiempo real <span>${esc(liveScore)}</span></summary><div class="transform-card-body"><div class="transform-live-score"><small>VALORACIÓN ACTUAL</small><strong>${esc(liveScore)}</strong><span>${position.fen.split(' ')[1]==='w'?'Juegan blancas':'Juegan negras'}</span></div><div class="transform-live-settings"><label class="toggle"><input data-transform-live-auto type="checkbox" ${lab.liveAuto?'checked':''}><span>Análisis automático</span></label><label>Jugadas recomendadas<select data-transform-live-pv><option value="1" ${lab.liveMultiPv===1?'selected':''}>1</option><option value="2" ${lab.liveMultiPv===2?'selected':''}>2</option><option value="3" ${lab.liveMultiPv===3?'selected':''}>3</option><option value="4" ${lab.liveMultiPv===4?'selected':''}>4</option><option value="5" ${lab.liveMultiPv===5?'selected':''}>5</option></select></label></div><div class="transform-live-candidates">${liveCandidates}</div></div></details><details class="transform-card" open><summary>Cuadro resumen <span>⌃</span></summary><div class="transform-card-body"><div class="transform-property-grid"><span>det(A)<b>${formatNumber(p.determinant)}</b></span><span>rank(A)<b>${p.rank}</b></span><span>tr(A)<b>${formatNumber(p.trace)}</b></span><span>‖A‖<sub>F</sub><b>${formatNumber(p.frobenius)}</b></span><span>cond⁺(A)<b>${formatNumber(p.condition)}</b></span><span>pdet<sub>σ</sub>(A)<b>${formatNumber(p.pseudoDeterminant)}</b></span><span>λ<sub>max</sub> aprox.<b>${formatNumber(p.lambdaMax)}</b></span><span>σ<sub>min+</sub><b>${formatNumber(p.sigmaMinPositive)}</b></span><span>Stockfish guardado<b>${sf}</b></span></div><details class="transform-matrix-preview"><summary>Vista previa de A</summary>${this.transformMatrixHtml(data.matrix)}</details><button class="primary transform-graph-button" data-transform-graph>Ver gráfica</button></div></details><details class="transform-card"><summary>Parámetros de la matriz <span>＋</span></summary><div class="transform-card-body"><label>Peso material<input data-transform-material-weight type="number" step="0.1" value="1" disabled></label><label>Peso control<input data-transform-control-weight type="number" step="0.1" value="1" disabled></label><p>Versión actual: material firmado + control acumulado. Rey = 4.</p></div></details><div class="transform-status ${lab.busy||lab.liveBusy?'busy':''}">${lab.progress||lab.liveError||'Listo para analizar.'}</div></aside>
+  </section>`;
+  $('[data-back]').onclick=()=>{this.screen='home';this.render()};
+  $('[data-transform-graph]').onclick=()=>{this.screen='stockfishGraph';this.render()};
+  $('[data-transform-depth]').onchange=event=>{lab.depth=clamp(Number(event.target.value),4,32);this.persistTransformConfig()};
+  $('[data-transform-new]').onclick=()=>{const number=lab.sheets.length+1,sheetNew=buildTimelineFromPgn('',`Hoja ${String(number).padStart(3,'0')} · Posición inicial`);sheetNew.source='nuevo';lab.sheets.push(sheetNew);lab.selectedId=sheetNew.id;lab.ply=0;this.resetTransformLiveState();this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform()};
+  $('[data-transform-delete-sheet]').onclick=()=>{if(lab.sheets.length===1)return alert('Debe conservarse al menos una hoja.');if(!confirm('¿Eliminar esta hoja del laboratorio?'))return;lab.sheets=lab.sheets.filter(item=>item.id!==sheet.id);lab.selectedId=lab.sheets[0].id;lab.ply=0;this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform()};
+  $$('[data-transform-sheet]').forEach(button=>button.onclick=()=>{lab.selectedId=button.dataset.transformSheet;lab.ply=0;this.resetTransformLiveState();this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform()});
+  $$('[data-transform-ply]').forEach(button=>button.onclick=()=>{lab.ply=Number(button.dataset.transformPly);this.resetTransformLiveState();this.renderStockfishTransform()});
+  $('[data-transform-prev]').onclick=()=>{lab.ply=0;this.resetTransformLiveState();this.renderStockfishTransform()};$('[data-transform-prev-one]').onclick=()=>{lab.ply=Math.max(0,lab.ply-1);this.resetTransformLiveState();this.renderStockfishTransform()};$('[data-transform-next-one]').onclick=()=>{lab.ply=Math.min(sheet.positions.length-1,lab.ply+1);this.resetTransformLiveState();this.renderStockfishTransform()};$('[data-transform-next]').onclick=()=>{lab.ply=sheet.positions.length-1;this.resetTransformLiveState();this.renderStockfishTransform()};
+  $('[data-transform-current-analysis]').onclick=()=>this.analyseTransformPosition();
+  $('[data-transform-pgn]').onchange=event=>this.importTransformPgnFiles([...event.target.files]);
+  $('[data-transform-png]').onchange=event=>this.importTransformPng(event.target.files?.[0]);
+  $('[data-transform-add-fen]').onclick=()=>this.addTransformFenSheet($('[data-transform-fen]').value);
+  $('[data-transform-apply-fen]').onclick=()=>this.applyTransformFen($('[data-transform-current-fen]').value);
+  $('[data-transform-undo]')?.addEventListener('click',()=>this.undoTransformManualMove());
+  $('[data-transform-live-analyse]')?.addEventListener('click',()=>{lab.liveAnalysisFen='';lab.liveCandidates=[];this.runTransformLiveAnalysis()});
+  $('[data-transform-live-auto]')?.addEventListener('change',event=>{lab.liveAuto=event.target.checked;this.persistTransformConfig();if(lab.liveAuto)this.scheduleTransformLiveAnalysis(20)});
+  $('[data-transform-live-pv]')?.addEventListener('change',event=>{lab.liveMultiPv=clamp(Number(event.target.value),1,5);lab.liveAnalysisFen='';lab.liveCandidates=[];this.persistTransformConfig();this.scheduleTransformLiveAnalysis(20)});
+  this.bindTransformLiveBoard();this.scheduleTransformLiveAnalysis();
+ }
+ addTransformFenSheet(fen){const lab=this.ensureTransformLab();try{const chess=new Chess(String(fen).trim()),sheet={id:crypto.randomUUID?.()||String(Date.now()),name:`Hoja ${String(lab.sheets.length+1).padStart(3,'0')} · FEN`,pgn:'',source:'fen',positions:[{fen:chess.fen(),san:'FEN',ply:0,label:'FEN',stockfish:null}],createdAt:Date.now()};lab.sheets.push(sheet);lab.selectedId=sheet.id;lab.ply=0;this.resetTransformLiveState();this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform()}catch{alert('El FEN no es válido.')}}
+ applyTransformFen(fen){const sheet=this.activeTransformSheet(),lab=this.ensureTransformLab();try{const chess=new Chess(String(fen).trim());sheet.positions=[{fen:chess.fen(),san:'FEN',ply:0,label:'FEN',stockfish:null}];sheet.pgn='';sheet.name=`${sheet.name.split(' · ')[0]} · FEN`;lab.ply=0;this.resetTransformLiveState();this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform()}catch{alert('El FEN no es válido.')}}
+ async importTransformPgnFiles(files){const lab=this.ensureTransformLab();let imported=0,failed=0;for(const file of files){try{const text=await file.text(),games=splitPgnDatabase(text);for(const [index,pgn] of games.entries()){try{const fallback=`${file.name.replace(/\.[^.]+$/,'')} ${games.length>1?index+1:''}`.trim(),sheet=buildTimelineFromPgn(pgn,pgnDisplayName(pgn,fallback));sheet.source='pgn';lab.sheets.push(sheet);imported++}catch{failed++}}}catch{failed++}}if(imported){lab.selectedId=lab.sheets[lab.sheets.length-imported].id;lab.ply=0;this.resetTransformLiveState();this.invalidateTransformGraphCache();this.resetTransformGraphView()}this.renderStockfishTransform();if(failed)alert(`${imported} partidas importadas; ${failed} no pudieron leerse.`)}
+ async importTransformPng(file){if(!file)return;if(file.size>5_000_000)return alert('La imagen no puede superar 5 MB.');const lab=this.ensureTransformLab(),data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(file)});const currentFen=this.activeTransformPosition()?.fen||new Chess().fen(),sheet={id:crypto.randomUUID?.()||String(Date.now()),name:`${file.name} · PNG`,source:'png',imageUrl:data,pgn:'',positions:[{fen:currentFen,san:'PNG',ply:0,label:'PNG',stockfish:null}],createdAt:Date.now()};lab.sheets.push(sheet);lab.selectedId=sheet.id;lab.ply=0;this.resetTransformLiveState();this.invalidateTransformGraphCache();this.resetTransformGraphView();this.renderStockfishTransform();alert('PNG adjuntado como referencia. Pega o aplica el FEN correspondiente para calcular la matriz exacta.')}
+ async analyseTransformPosition(){
+  const lab=this.ensureTransformLab(),position=this.activeTransformPosition();if(lab.busy)return;
+  lab.busy=true;lab.progress=`Analizando ${position.label} a profundidad ${lab.depth}…`;this.renderStockfishTransform();
+  try{
+   await this.engine.init();
+   const result=await this.engine.analyse(position.fen,{depth:lab.depth,multiPv:1,skill:20,timeoutMs:90000}),score=result?.[0]?.score;
+   position.stockfish=Number.isFinite(score)?score:null;this.invalidateTransformStockfishSeries();
+   lab.progress=position.stockfish==null?'Stockfish no devolvió valoración.':`Valoración guardada: ${(position.stockfish/100).toFixed(2)} peones.`
+  }catch(error){lab.progress=`No se pudo analizar: ${error.message}`}
+  finally{
+   lab.busy=false;
+   if(this.screen==='stockfishTransform')this.renderStockfishTransform();
+   else if(this.screen==='stockfishGraph')this.renderStockfishGraph();
+  }
+ }
+ async analyseTransformSheet(){
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet();if(lab.busy)return;
+  const pending=sheet.positions.filter(position=>!Number.isFinite(position.stockfish));
+  if(!pending.length){lab.progress='La hoja ya tiene una valoración de Stockfish en cada semijugada.';this.updateTransformGraphStatus();this.scheduleTransformGraphDraw();return}
+  if(lab.liveTimer){clearTimeout(lab.liveTimer);lab.liveTimer=null}lab.liveToken=null;lab.liveBusy=false;
+  const token=crypto.randomUUID?.()||String(Date.now());lab.analysisToken=token;lab.busy=true;
+  let completed=0,failed=0,processed=0;
+  try{
+   await this.engine.init();
+   for(const position of pending){
+    if(lab.analysisToken!==token)break;
+    lab.progress=`Stockfish: ${processed+1}/${pending.length} · ${position.label}`;this.updateTransformGraphStatus();
+    let score=null,lastError=null;
+    for(let attempt=0;attempt<2&&!Number.isFinite(score);attempt++){
+     try{
+      const result=await this.engine.analyse(position.fen,{nodes:lab.batchNodes,multiPv:1,skill:20,timeoutMs:90000});
+      const candidate=result?.[0]?.score;if(Number.isFinite(candidate))score=candidate;else lastError=new Error('Stockfish no devolvió puntuación.');
+     }catch(error){lastError=error;if(lab.analysisToken!==token)break;if(attempt===0){this.engine.clearHash?.();await new Promise(resolve=>setTimeout(resolve,20))}}
+    }
+    if(lab.analysisToken!==token)break;
+    if(Number.isFinite(score)){position.stockfish=score;completed++}else{failed++;position.stockfish=null;lab.progress=`Sin valoración en ${position.label}: ${lastError?.message||'error desconocido'}`}
+    processed++;this.invalidateTransformStockfishSeries();this.updateTransformGraphStatus();this.scheduleTransformGraphDraw();
+    await new Promise(resolve=>globalThis.requestAnimationFrame?requestAnimationFrame(()=>resolve()):setTimeout(resolve,0));
+    if(processed%16===0)this.engine.clearHash?.();
+   }
+  }catch(error){if(lab.analysisToken===token)lab.progress=`Stockfish no pudo iniciar: ${error.message}`}
+  finally{
+   this.invalidateTransformStockfishSeries();
+   if(lab.analysisToken===token){
+    lab.busy=false;lab.analysisToken=null;
+    if(!lab.progress.startsWith('Stockfish no pudo'))lab.progress=`Serie Stockfish: ${completed}/${pending.length} semijugadas nuevas${failed?` · ${failed} sin resultado tras reintento`:''}.`;
+    if(this.screen==='stockfishGraph'){this.updateTransformGraphStatus();this.updateTransformLegend();this.scheduleTransformGraphDraw()}
+    else if(this.screen==='stockfishTransform')this.renderStockfishTransform();
+   }else if(this.screen==='stockfishGraph')this.scheduleTransformGraphDraw();
+  }
+ }
+ stopTransformAnalysis(){
+  const lab=this.ensureTransformLab();lab.analysisToken=null;lab.busy=false;this.engine.stop?.();lab.progress='Análisis detenido por el usuario.';
+  if(this.screen==='stockfishGraph')this.renderStockfishGraph();
+  else if(this.screen==='stockfishTransform')this.renderStockfishTransform();
+ }
+ transformFunctionSeriesData(functionIndex=this.ensureTransformLab().activeGraphFunction){
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet(),index=clamp(Number(functionIndex),0,Math.max(0,lab.expressions.length-1)),signature=lab.expressions.join('\n'),cacheKey=`${sheet.id}|${sheet.positions.length}|${signature}|${index}|${lab.cacheRevision}|sf:${lab.stockfishRevision}`;
+  if(lab.rawSeriesCache?.key===cacheKey)return lab.rawSeriesCache.value;
+  const functionInfo=this.transformExpressionInfo(lab.expressions[index],index),points=[];let completed=0,kind='unknown',firstError='';
+  for(let positionIndex=0;positionIndex<sheet.positions.length;positionIndex++){
+   const position=sheet.positions[positionIndex],cache=this.transformFunctionCache(position,signature),analysis=cache.byIndex[index],properties=analysis?.properties||null;
+   if(analysis){completed+=1;if(kind==='unknown'&&analysis.kind)kind=analysis.kind;if(!firstError&&analysis.error)firstError=analysis.error}
+   points.push({
+    index:positionIndex,label:position.label,stockfish:Number.isFinite(position.stockfish)?position.stockfish/100:null,
+    output:analysis?.scalar??null,
+    determinant:properties?.determinant??null,rank:properties?.rank??null,trace:properties?.trace??null,
+    frobenius:properties?.frobenius??null,condition:properties?.condition??null,
+    pseudoDeterminant:properties?.pseudoDeterminant??null,lambdaMax:properties?.lambdaMax??null,
+    sigmaMinPositive:properties?.sigmaMinPositive??null,error:analysis?.error||'',
+   });
+  }
+  const value={points,functionInfo,kind,completed,total:sheet.positions.length,error:firstError};lab.rawSeriesCache={key:cacheKey,value};return value;
+ }
+ async analyseTransformFunctionTab(functionIndex=this.ensureTransformLab().activeGraphFunction){
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet(),index=clamp(Number(functionIndex),0,Math.max(0,lab.expressions.length-1)),signature=lab.expressions.join('\n');
+  const token=crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;lab.functionAnalysisToken=token;lab.functionAnalysisProgress=`Preparando ${this.transformExpressionInfo(lab.expressions[index],index).label}…`;this.updateTransformGraphStatus();
+  let definitions;
+  try{
+   if(lab.compiledDefinitionsCache?.signature===signature)definitions=lab.compiledDefinitionsCache.value;
+   else{definitions=compileFunctionDefinitions(lab.expressions);lab.compiledDefinitionsCache={signature,value:definitions}}
+  }catch(error){
+   lab.functionAnalysisProgress=`Error de fórmula: ${error.message}`;lab.functionAnalysisToken=null;this.updateTransformGraphStatus();return;
+  }
+  let completed=0,computed=0,errors=0;
+  for(let positionIndex=0;positionIndex<sheet.positions.length;positionIndex++){
+   if(lab.functionAnalysisToken!==token||this.screen!=='stockfishGraph'||lab.activeGraphFunction!==index)return;
+   const position=sheet.positions[positionIndex],cache=this.transformFunctionCache(position,signature);
+   if(!cache.byIndex[index]){
+    try{
+     const data=this.transformPositionData(position),outputs=evaluateCompiledFunctionDefinitions(definitions,data.matrix),output=outputs[index];
+     if(!output)throw new Error('La función seleccionada no produjo salida.');
+     const properties=output.kind==='matrix'?algebraicProperties(output.value):null;
+     cache.byIndex[index]={name:output.name,kind:output.kind,scalar:output.scalar,properties,error:''};
+    }catch(error){cache.byIndex[index]={name:this.transformExpressionInfo(lab.expressions[index],index).name,kind:'error',scalar:null,properties:null,error:error.message};errors+=1}
+    computed+=1;
+   }
+   completed+=1;
+   if(completed%3===0||completed===sheet.positions.length){
+    lab.rawSeriesCache=null;lab.graphSeriesCache=null;
+    lab.functionAnalysisProgress=`${this.transformExpressionInfo(lab.expressions[index],index).label}: ${completed}/${sheet.positions.length}${errors?` · ${errors} errores`:''}`;
+    this.updateTransformGraphStatus();this.scheduleTransformGraphDraw();
+    await new Promise(resolve=>globalThis.requestAnimationFrame?requestAnimationFrame(()=>resolve()):setTimeout(resolve,0));
+   }
+  }
+  if(lab.functionAnalysisToken===token){
+   lab.functionAnalysisToken=null;lab.functionAnalysisProgress=`${this.transformExpressionInfo(lab.expressions[index],index).label}: ${sheet.positions.length} semijugadas listas${computed?` · ${computed} calculadas`:''}${errors?` · ${errors} errores`:''}.`;
+   lab.rawSeriesCache=null;lab.graphSeriesCache=null;this.updateTransformGraphStatus();this.scheduleTransformGraphDraw();
+  }
+ }
+ normalizedTransformSeries(values){return normalizeFiniteSeries(values,-20,20)}
+ transformGraphSeries(){
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet(),index=clamp(lab.activeGraphFunction,0,Math.max(0,lab.expressions.length-1)),visibilityKey=Object.entries(lab.visibility).filter(([,value])=>value).map(([key])=>key).join(','),cacheKey=`${lab.cacheRevision}|sf:${lab.stockfishRevision}|${lab.normalized}|${visibilityKey}|${lab.expressions.join('\n')}|${index}|${sheet.id}|${sheet.positions.length}`;
+  if(lab.graphSeriesCache?.key===cacheKey)return lab.graphSeriesCache.value;
+  const data=this.transformFunctionSeriesData(index),points=data.points;
+  const definitions=[
+   ['stockfish','Stockfish',points.map(point=>point.stockfish),'#4ea9e8'],
+   ['output',`Salida ${data.functionInfo.label}`,points.map(point=>point.output),'#55c2ff'],
+   ['determinant','det(B)',points.map(point=>point.determinant),'#55c991'],
+   ['rank','rank(B)',points.map(point=>point.rank),'#f2b84b'],
+   ['trace','tr(B)',points.map(point=>point.trace),'#ff9f55'],
+   ['frobenius','‖B‖F',points.map(point=>point.frobenius),'#57c7cf'],
+   ['condition','cond⁺(B)',points.map(point=>point.condition),'#a879e8'],
+   ['pseudoDeterminant','pdetσ(B)',points.map(point=>point.pseudoDeterminant),'#ef6868'],
+   ['lambdaMax','λmax(B)',points.map(point=>point.lambdaMax),'#d8d05b'],
+   ['sigmaMinPositive','σmin+(B)',points.map(point=>point.sigmaMinPositive),'#d18fff'],
+  ];
+  const series=definitions.filter(([id])=>lab.visibility[id]).map(([id,label,values,color])=>({id,label,color,values:lab.normalized?this.normalizedTransformSeries(values):values}));
+  const value={...data,series};lab.graphSeriesCache={key:cacheKey,value};return value;
+ }
+ transformLegendHtml(){return this.transformGraphSeries().series.map(series=>`<span><i style="--legend-color:${series.color}"></i>${esc(series.label)}</span>`).join('')||'<span class="transform-empty-legend">No hay series visibles.</span>'}
+ updateTransformLegend(){const legend=$('.transform-legend');if(legend)legend.innerHTML=this.transformLegendHtml()}
+ renderStockfishGraph(){
+  this.disposeTransformGraphBinding();
+  const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet();lab.activeExpression=clamp(lab.activeExpression,0,Math.max(0,lab.expressions.length-1));lab.activeGraphFunction=clamp(lab.activeGraphFunction,0,Math.max(0,lab.expressions.length-1));
+  const data=this.transformGraphSeries(),activeInfo=this.transformExpressionInfo(lab.expressions[lab.activeGraphFunction],lab.activeGraphFunction),v=$('#view');
+  const expressionRows=lab.expressions.map((expression,index)=>{const info=this.transformExpressionInfo(expression,index);return `<div class="transform-expression-row ${index===lab.activeExpression?'active':''}" data-expression-row="${index}"><i style="--series-color:${['#55c2ff','#55c991','#f2b84b','#a879e8'][index%4]}"></i><input data-transform-expression="${index}" value="${esc(expression)}" spellcheck="false" aria-label="Definición de ${esc(info.label)}"><span class="transform-expression-scope ${info.target==='a+A'?'mixed':''}">${info.target}</span><button data-transform-expression-delete="${index}" title="Eliminar">×</button></div>`}).join('');
+  const metricControls=[
+   ['stockfish','Stockfish'],['output','Salida de la función'],['determinant','det(B)'],['rank','rank(B)'],['trace','tr(B)'],
+   ['frobenius','‖B‖F'],['condition','cond⁺(B)'],['pseudoDeterminant','pdetσ(B)'],['lambdaMax','λmax(B)'],['sigmaMinPositive','σmin+(B)'],
+  ].map(([id,label])=>`<label><input data-transform-visibility="${id}" type="checkbox" ${lab.visibility[id]?'checked':''}><span class="transform-control-dot ${id}"></span>${label}<button type="button" title="Mostrar u ocultar">◉</button></label>`).join('');
+  const variableButtons=`<div class="transform-target-picker" role="group" aria-label="Objeto al que se aplica la función"><button type="button" data-transform-target="a" class="${lab.applicationTarget==='a'?'active':''}"><b>a</b><span>Aplicar a cada valor</span><small>Entrada por entrada</small></button><button type="button" data-transform-target="A" class="${lab.applicationTarget==='A'?'active':''}"><b>A</b><span>Aplicar a la matriz</span><small>Operación matricial</small></button></div>`;
+  v.innerHTML=`<section class="transform-page-head compact"><button data-transform-summary>← Volver al resumen</button><div><small>LABORATORIO ALGEBRAICO</small><h1>Transformada de Stockfish</h1></div><div class="transform-graph-toolbar"><div class="segmented"><button data-transform-mode="semimove" class="${lab.graphMode==='semimove'?'active':''}">Por semijugada</button><button data-transform-mode="continuous" class="${lab.graphMode==='continuous'?'active':''}">Función continua</button></div><label><input data-transform-normalized type="checkbox" ${lab.normalized?'checked':''}> Normalizar</label><label class="transform-node-limit">Nodos/posición<input data-transform-batch-nodes type="number" min="1000" max="100000" step="1000" value="${lab.batchNodes}"></label><button data-transform-analyse-sheet ${lab.busy?'disabled':''}>${lab.busy?'Analizando…':'Analizar hoja con Stockfish'}</button>${lab.busy?'<button data-transform-stop>Detener</button>':''}</div></section>
+  <section class="transform-graph-layout"><aside class="transform-calculator-column"><details class="transform-card" open><summary>Calculadora / Expresiones <span>⌃</span></summary><div class="transform-card-body"><p class="transform-apply-title">¿A qué se aplica la próxima operación?</p>${variableButtons}<p class="transform-target-help">Pulsa <b>a</b> o <b>A</b> para insertarlo en la fórmula activa. Ejemplo: <code>exp(a)</code> transforma cada celda; <code>exp(A)</code> calcula la exponencial matricial.</p><div class="transform-expression-list">${expressionRows}<button data-transform-add-expression>＋ Agregar función ${lab.applicationTarget==='A'?'matricial':'sobre valores'}</button></div><div class="transform-keyboard"><div class="transform-keyboard-tabs"><b>123</b><b class="active">f(x)</b><b>ABC</b><b>#&¬</b></div><div class="transform-variable-keys"><button data-transform-key="a"><b>a</b><span>Valores</span></button><button data-transform-key="A"><b>A</b><span>Matriz</span></button></div><div class="transform-key-grid">${['sen','cos','tg','sen⁻¹','cos⁻¹','tg⁻¹','ln','log10','log2','e^x','10^x','sqrt(','abs(','det(','rank(','tr(','norm(','pdet(','cond(','inv(','exp(','(',')','^','+','-','*','/','I','←'].map(key=>`<button data-transform-key="${esc(key)}">${key}</button>`).join('')}</div></div><p class="transform-calc-help"><b>a minúscula</b>: aplica la operación a cada valor de la matriz. <b>A mayúscula</b>: aplica la operación a la matriz completa. Las funciones mixtas pueden usar ambas.</p></div></details><details class="transform-card" open><summary>Control de datos de la pestaña <span>⌃</span></summary><div class="transform-card-body transform-function-controls">${metricControls}<p>Cada pestaña corresponde a una sola función. Dentro de ella se grafican sus propiedades históricas por semijugada.</p></div></details></aside>
+   <main class="transform-plot-panel"><nav class="transform-function-tabs" aria-label="Gráficas por función">${this.transformFunctionTabsHtml()}</nav><div class="transform-active-graph"><div><small>FUNCIÓN ACTIVA</small><b>${esc(activeInfo.label)}</b><span>${activeInfo.target==='a'?'aplicada a valores':activeInfo.target==='A'?'aplicada a la matriz completa':'función mixta a + A'}</span></div><em id="transformFunctionCompletion">${data.completed}/${data.total} posiciones calculadas</em></div><div class="transform-plot-hint">ⓘ Esta pestaña contiene Stockfish y todas las propiedades algebraicas de la salida B de ${esc(activeInfo.label)}. Arrastra para mover y usa la rueda para acercar o alejar.</div><div class="transform-canvas-wrap"><canvas id="transformGraph" aria-label="Gráfica de ${esc(activeInfo.label)} por semijugada"></canvas><div class="transform-plot-controls"><button data-transform-pan title="Mover">✥</button><button data-transform-zoom-in>＋</button><button data-transform-zoom-out>−</button><button data-transform-fit>⛶</button><button data-transform-home>⌂</button></div><div class="transform-legend">${data.series.map(series=>`<span><i style="--legend-color:${series.color}"></i>${esc(series.label)}</span>`).join('')}</div></div><footer><span id="transformGraphRange"></span><span>${sheet.positions.length} puntos · ${esc(sheet.name)} · ${esc(activeInfo.label)}</span><span id="transformGraphStatus">${esc(lab.functionAnalysisProgress||lab.progress||'Preparando datos…')}</span></footer></main></section>`;
+  $('[data-transform-summary]').onclick=()=>{this.screen='stockfishTransform';this.render()};
+  $$('[data-transform-mode]').forEach(button=>button.onclick=()=>{lab.graphMode=button.dataset.transformMode;this.persistTransformConfig();this.resetTransformGraphView();this.renderStockfishGraph()});
+  $('[data-transform-normalized]').onchange=event=>{lab.normalized=event.target.checked;this.persistTransformConfig();this.resetTransformGraphView();this.renderStockfishGraph()};
+  $('[data-transform-batch-nodes]').onchange=event=>{lab.batchNodes=clamp(Number(event.target.value),1000,100000);this.persistTransformConfig()};
+  $('[data-transform-analyse-sheet]').onclick=()=>this.analyseTransformSheet();$('[data-transform-stop]')?.addEventListener('click',()=>this.stopTransformAnalysis());
+  $$('[data-transform-function-tab]').forEach(button=>button.onclick=()=>{const index=Number(button.dataset.transformFunctionTab);lab.activeGraphFunction=index;lab.activeExpression=index;const info=this.transformExpressionInfo(lab.expressions[index],index);if(info.target!=='a+A')lab.applicationTarget=info.target;lab.rawSeriesCache=null;lab.graphSeriesCache=null;this.persistTransformConfig();this.resetTransformGraphView();this.renderStockfishGraph()});
+  $$('[data-transform-target]').forEach(button=>button.onclick=()=>{const target=button.dataset.transformTarget;lab.applicationTarget=target;this.persistTransformConfig();$$('[data-transform-target]').forEach(item=>item.classList.toggle('active',item.dataset.transformTarget===target));this.insertTransformKey(target)});
+  $$('[data-transform-expression]').forEach(input=>{
+   input.onfocus=()=>{const index=Number(input.dataset.transformExpression);lab.activeExpression=index;lab.activeGraphFunction=index;const info=this.transformExpressionInfo(lab.expressions[index],index);if(info.target!=='a+A')lab.applicationTarget=info.target};
+   input.onchange=()=>{const index=Number(input.dataset.transformExpression);lab.expressions[index]=input.value;lab.activeExpression=index;lab.activeGraphFunction=index;lab.rawSeriesCache=null;lab.graphSeriesCache=null;lab.compiledDefinitionsCache=null;lab.functionAnalysisToken=null;this.persistTransformConfig();this.renderStockfishGraph()};
+  });
+  $$('[data-transform-expression-delete]').forEach(button=>button.onclick=()=>{if(lab.expressions.length===1)return;const index=Number(button.dataset.transformExpressionDelete);lab.expressions.splice(index,1);lab.activeExpression=clamp(lab.activeExpression>index?lab.activeExpression-1:lab.activeExpression,0,lab.expressions.length-1);lab.activeGraphFunction=clamp(lab.activeGraphFunction>index?lab.activeGraphFunction-1:lab.activeGraphFunction,0,lab.expressions.length-1);lab.rawSeriesCache=null;lab.graphSeriesCache=null;lab.compiledDefinitionsCache=null;lab.functionAnalysisToken=null;this.persistTransformConfig();this.renderStockfishGraph()});
+  $('[data-transform-add-expression]').onclick=()=>{const number=lab.expressions.length+1,expression=lab.applicationTarget==='A'?`F${number}(A)=A`:`f${number}(a)=a`;lab.expressions.push(expression);lab.activeExpression=lab.expressions.length-1;lab.activeGraphFunction=lab.activeExpression;lab.rawSeriesCache=null;lab.graphSeriesCache=null;lab.compiledDefinitionsCache=null;this.persistTransformConfig();this.renderStockfishGraph()};
+  $$('[data-transform-key]').forEach(button=>button.onclick=()=>this.insertTransformKey(button.dataset.transformKey));
+  $$('[data-transform-visibility]').forEach(input=>input.onchange=()=>{lab.visibility[input.dataset.transformVisibility]=input.checked;lab.graphSeriesCache=null;this.persistTransformConfig();this.updateTransformLegend();this.scheduleTransformGraphDraw()});
+  $('[data-transform-zoom-in]').onclick=()=>this.zoomTransformGraph(.8);$('[data-transform-zoom-out]').onclick=()=>this.zoomTransformGraph(1.25);$('[data-transform-fit]').onclick=()=>{this.fitTransformGraph();this.drawTransformGraph()};$('[data-transform-home]').onclick=()=>{this.resetTransformGraphView();this.drawTransformGraph()};
+  this.bindTransformGraph();this.drawTransformGraph();this.analyseTransformFunctionTab(lab.activeGraphFunction);
+  if(lab.graphMode==='semimove'&&lab.visibility.stockfish&&sheet.positions.some(item=>!Number.isFinite(item.stockfish))&&!lab.busy)setTimeout(()=>{if(this.screen==='stockfishGraph'&&!this.ensureTransformLab().busy)this.analyseTransformSheet()},40);
+ }
+ insertTransformKey(key){
+  const lab=this.ensureTransformLab(),input=$(`[data-transform-expression="${lab.activeExpression}"]`);if(!input)return;
+  if(key==='a'||key==='A')lab.applicationTarget=key;
+  const map={'sen':'sin(','sen⁻¹':'asin(','cos⁻¹':'acos(','tg⁻¹':'atan(','e^x':'exp(','10^x':'10^(','←':''},text=map[key]??key;
+  if(key==='←'){
+   const start=input.selectionStart||0;
+   if(start>0){input.value=input.value.slice(0,start-1)+input.value.slice(input.selectionEnd||start);input.setSelectionRange(start-1,start-1)}
+  }else{
+   const start=input.selectionStart??input.value.length,end=input.selectionEnd??start;
+   input.value=input.value.slice(0,start)+text+input.value.slice(end);input.setSelectionRange(start+text.length,start+text.length);
+  }
+  input.focus();lab.expressions[lab.activeExpression]=input.value;lab.activeGraphFunction=lab.activeExpression;
+  lab.rawSeriesCache=null;lab.graphSeriesCache=null;lab.compiledDefinitionsCache=null;lab.functionAnalysisToken=null;this.persistTransformConfig();
+  clearTimeout(lab.expressionTimer);lab.expressionTimer=setTimeout(()=>{if(this.screen==='stockfishGraph')this.renderStockfishGraph()},350);
+ }
+ resetTransformGraphView(){const lab=this.ensureTransformLab(),sheet=this.activeTransformSheet();if(lab.graphMode==='continuous')lab.graph={xMin:-20,xMax:20,yMin:-20,yMax:20};else lab.graph={xMin:0,xMax:Math.max(20,sheet.positions.length-1),yMin:lab.normalized?-20:-10,yMax:lab.normalized?20:10}}
+ fitTransformGraph(){const lab=this.ensureTransformLab();if(lab.graphMode==='continuous'){lab.graph={xMin:-20,xMax:20,yMin:-20,yMax:20};return}const {series,points}=this.transformGraphSeries(),extent=finiteExtentOfSeries(series),min=extent?.min??-20,max=extent?.max??20,pad=Math.max(1,(max-min)*.12);lab.graph={xMin:0,xMax:Math.max(10,points.length-1),yMin:min-pad,yMax:max+pad}}
+ zoomTransformGraph(factor,center=null){const lab=this.ensureTransformLab(),g=lab.graph,cx=center?.x??(g.xMin+g.xMax)/2,cy=center?.y??(g.yMin+g.yMax)/2;g.xMin=cx+(g.xMin-cx)*factor;g.xMax=cx+(g.xMax-cx)*factor;g.yMin=cy+(g.yMin-cy)*factor;g.yMax=cy+(g.yMax-cy)*factor;this.scheduleTransformGraphDraw()}
+ bindTransformGraph(){
+  const lab=this.ensureTransformLab(),canvas=$('#transformGraph');if(!canvas)return;
+  canvas.onpointerdown=event=>{canvas.setPointerCapture?.(event.pointerId);lab.drag={id:event.pointerId,x:event.clientX,y:event.clientY,graph:{...lab.graph}}};
+  canvas.onpointermove=event=>{if(!lab.drag||lab.drag.id!==event.pointerId)return;const rect=canvas.getBoundingClientRect(),dx=(event.clientX-lab.drag.x)/Math.max(1,rect.width)*(lab.drag.graph.xMax-lab.drag.graph.xMin),dy=(event.clientY-lab.drag.y)/Math.max(1,rect.height)*(lab.drag.graph.yMax-lab.drag.graph.yMin);lab.graph={xMin:lab.drag.graph.xMin-dx,xMax:lab.drag.graph.xMax-dx,yMin:lab.drag.graph.yMin+dy,yMax:lab.drag.graph.yMax+dy};this.scheduleTransformGraphDraw()};
+  canvas.onpointerup=canvas.onpointercancel=event=>{if(lab.drag?.id===event.pointerId)lab.drag=null};
+  canvas.onwheel=event=>{event.preventDefault();const rect=canvas.getBoundingClientRect(),g=lab.graph,cx=g.xMin+(event.clientX-rect.left)/Math.max(1,rect.width)*(g.xMax-g.xMin),cy=g.yMax-(event.clientY-rect.top)/Math.max(1,rect.height)*(g.yMax-g.yMin);this.zoomTransformGraph(event.deltaY>0?1.12:.89,{x:cx,y:cy})};
+  const onResize=()=>{if(this.screen==='stockfishGraph')this.scheduleTransformGraphDraw()};
+  if(typeof ResizeObserver==='function'){lab.graphResizeObserver=new ResizeObserver(onResize);lab.graphResizeObserver.observe(canvas);if(canvas.parentElement)lab.graphResizeObserver.observe(canvas.parentElement)}
+  else{lab.graphResizeFallback=onResize;window.addEventListener('resize',onResize)}
+  $$('details',canvas.closest('.transform-graph-layout')||document).forEach(details=>details.addEventListener('toggle',()=>{if(details.open)setTimeout(()=>this.scheduleTransformGraphDraw(),0)}));
+ }
+ drawTransformGraph(){
+  const canvas=$('#transformGraph');if(!canvas)return;const lab=this.ensureTransformLab(),rect=canvas.getBoundingClientRect();if(rect.width<10||rect.height<10){if(!lab.drawRetry)lab.drawRetry=setTimeout(()=>{lab.drawRetry=null;if(this.screen==='stockfishGraph')this.scheduleTransformGraphDraw()},120);return}if(lab.drawRetry){clearTimeout(lab.drawRetry);lab.drawRetry=null}const pixels=rect.width*rect.height,dpr=Math.min(pixels>1_400_000?1:1.5,window.devicePixelRatio||1);const targetW=Math.max(1,Math.round(rect.width*dpr)),targetH=Math.max(1,Math.round(rect.height*dpr));if(canvas.width!==targetW||canvas.height!==targetH){canvas.width=targetW;canvas.height=targetH}const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)return;ctx.setTransform(dpr,0,0,dpr,0,0);const width=rect.width,height=rect.height,pad={left:58,right:28,top:24,bottom:48},plotW=Math.max(1,width-pad.left-pad.right),plotH=Math.max(1,height-pad.top-pad.bottom),g=lab.graph,xRange=Math.max(1e-9,g.xMax-g.xMin),yRange=Math.max(1e-9,g.yMax-g.yMin),xToPx=x=>pad.left+(x-g.xMin)/xRange*plotW,yToPx=y=>pad.top+(g.yMax-y)/yRange*plotH;ctx.clearRect(0,0,width,height);ctx.fillStyle='#081522';ctx.fillRect(0,0,width,height);
+  const niceStep=range=>{const rough=range/10,power=10**Math.floor(Math.log10(Math.max(rough,1e-9))),fraction=rough/power;return (fraction<1.5?1:fraction<3?2:fraction<7?5:10)*power},xStep=niceStep(xRange),yStep=niceStep(yRange);ctx.font='12px Inter,Segoe UI,sans-serif';ctx.lineWidth=1;
+  const graphData=lab.graphMode==='semimove'?this.transformGraphSeries():null,pointLabels=graphData?.points?.map(point=>point.label)||[];
+  for(let x=Math.ceil(g.xMin/xStep)*xStep;x<=g.xMax+1e-10;x+=xStep){const px=xToPx(x);ctx.strokeStyle=Math.abs(x)<xStep/100?'#7fa7bd66':'#ffffff12';ctx.beginPath();ctx.moveTo(px,pad.top);ctx.lineTo(px,height-pad.bottom);ctx.stroke();ctx.fillStyle='#8ea7b7';ctx.textAlign='center';const rounded=Math.round(x),label=lab.graphMode==='semimove'&&Math.abs(x-rounded)<1e-6&&pointLabels[rounded]?pointLabels[rounded]:formatNumber(x,2);ctx.fillText(label,px,height-pad.bottom+20)}
+  for(let y=Math.ceil(g.yMin/yStep)*yStep;y<=g.yMax+1e-10;y+=yStep){const py=yToPx(y);ctx.strokeStyle=Math.abs(y)<yStep/100?'#7fa7bd66':'#ffffff12';ctx.beginPath();ctx.moveTo(pad.left,py);ctx.lineTo(width-pad.right,py);ctx.stroke();ctx.fillStyle='#8ea7b7';ctx.textAlign='right';ctx.fillText(formatNumber(y,2),pad.left-8,py+4)}
+  if(lab.graphMode==='continuous'){
+   const scalarLine=lab.expressions[clamp(lab.activeGraphFunction,0,Math.max(0,lab.expressions.length-1))];if(scalarLine){let compiled=null;try{if(lab.continuousCache?.line===scalarLine)compiled=lab.continuousCache.fn;else{compiled=compileScalarFunctionLine(scalarLine);lab.continuousCache={line:scalarLine,fn:compiled}}}catch{compiled=null}if(compiled){ctx.strokeStyle='#4ea9e8';ctx.lineWidth=2.3;ctx.beginPath();let started=false;const samples=Math.min(700,Math.max(240,Math.round(plotW)));for(let index=0;index<samples;index++){const x=g.xMin+(index/(samples-1))*xRange;let y;try{y=compiled(x)}catch{y=NaN}if(!Number.isFinite(y)||y<g.yMin*20||y>g.yMax*20){started=false;continue}const px=xToPx(x),py=yToPx(y);if(!started){ctx.moveTo(px,py);started=true}else ctx.lineTo(px,py)}ctx.stroke()}}}
+  else{const {series}=graphData||this.transformGraphSeries(),start=Math.max(0,Math.floor(g.xMin)-1),maxLength=series.reduce((max,item)=>Math.max(max,item.values.length),0),end=Math.min(maxLength-1,Math.ceil(g.xMax)+1),visibleCount=Math.max(0,end-start+1),baseStride=Math.max(1,Math.floor(visibleCount/Math.max(240,Math.floor(plotW/2))));for(const item of series){const exactStockfish=item.id==='stockfish',stride=exactStockfish?1:baseStride;ctx.strokeStyle=item.color;ctx.fillStyle=item.color;ctx.lineWidth=exactStockfish?3:1.8;ctx.setLineDash(item.dash?[6,4]:[]);ctx.beginPath();let started=false;for(let index=start;index<=end;index+=stride){const value=item.values[index];if(!Number.isFinite(value)){if(!exactStockfish)started=false;continue}const px=xToPx(index),py=yToPx(value);if(!started){ctx.moveTo(px,py);started=true}else ctx.lineTo(px,py)}if(!exactStockfish&&end>=start&&((end-start)%stride)!==0){const value=item.values[end];if(Number.isFinite(value))ctx.lineTo(xToPx(end),yToPx(value))}ctx.stroke();ctx.setLineDash([]);const pointStride=exactStockfish?1:Math.max(stride,Math.ceil(visibleCount/160));for(let index=start;index<=end;index+=pointStride){const value=item.values[index];if(!Number.isFinite(value))continue;ctx.beginPath();ctx.arc(xToPx(index),yToPx(value),exactStockfish?3.1:2,0,Math.PI*2);ctx.fill();if(exactStockfish){ctx.strokeStyle='#081522';ctx.lineWidth=1;ctx.stroke()}}}}
+  ctx.fillStyle='#aec2ce';ctx.textAlign='center';ctx.font='13px Inter,Segoe UI,sans-serif';ctx.fillText(lab.graphMode==='continuous'?'Variable x':'Semijugadas',pad.left+plotW/2,height-10);ctx.save();ctx.translate(16,pad.top+plotH/2);ctx.rotate(-Math.PI/2);ctx.fillText(lab.normalized&&lab.graphMode==='semimove'?'Valor normalizado [-20, 20]':'Valor',0,0);ctx.restore();const range=$('#transformGraphRange');if(range)range.textContent=`x ∈ [${formatNumber(g.xMin,2)}, ${formatNumber(g.xMax,2)}] · y ∈ [${formatNumber(g.yMin,2)}, ${formatNumber(g.yMax,2)}]`;
+ }
+ updateTransformGraphStatus(){const lab=this.ensureTransformLab(),status=$('#transformGraphStatus');if(status)status.textContent=lab.functionAnalysisProgress||lab.progress||'Listo.';const completion=$('#transformFunctionCompletion');if(completion){const data=this.transformFunctionSeriesData(lab.activeGraphFunction);completion.textContent=`${data.completed}/${data.total} posiciones calculadas`}}
+
+ paintStatus(){const el=$('#engine-status');if(el)el.textContent=this.engineStatus}
+}
+async function prepareBuild(){try{const response=await fetch(`./version.json?t=${Date.now()}`,{cache:'no-store'});if(!response.ok)return;const meta=await response.json();const key='omegazero:runtime:build';const previous=localStorage.getItem(key);if(previous&&previous!==meta.buildId){if('caches' in window){for(const name of await caches.keys())await caches.delete(name)}if('serviceWorker' in navigator){for(const registration of await navigator.serviceWorker.getRegistrations())await registration.unregister()}}localStorage.setItem(key,meta.buildId)}catch{/* La ruta versionada de assets sigue evitando mezclar compilaciones. */}}
+await prepareBuild();
+const omegaZeroApp = new App(document.getElementById('app'));
