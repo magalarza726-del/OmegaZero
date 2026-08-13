@@ -1,4 +1,4 @@
-# OmegaZero v2.8.1 — Aplicación web personal
+# OmegaZero v2.8.2 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -15,13 +15,13 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 - Personalización de tableros, piezas, anotaciones y sonidos.
 - Persistencia local mediante IndexedDB.
 - Laboratorio **Transformada de Stockfish** con matriz posición-control, propiedades algebraicas, funciones escalares/matriciales y gráfica por semijugada.
-- **Alfabeto estructural de peones**: galería interactiva de las 256 configuraciones `0000`–`3333`, con mapa cromático objetivo y detalle geométrico por estructura.
+- **Alfabeto estructural de peones**: galería interactiva de 625 microestructuras usando los estados `0`, `1`, `2`, `3` y `9`, con mapa cromático objetivo y detalle geométrico por estructura.
 
 
 
 ## Alfabeto estructural de peones
 
-Desde Inicio, la tarjeta **Alfabeto estructural** abre una galería generada algorítmicamente con las 256 configuraciones teóricas de cuatro peones contiguos. Cada dígito del código indica un avance de 0 a 3 casillas desde la posición inicial.
+Desde Inicio, la tarjeta **Alfabeto estructural** abre una galería generada algorítmicamente con las 625 combinaciones teóricas de cuatro archivos contiguos. Cada dígito usa `0`–`3` para el avance desde la posición inicial y `9` para indicar que el peón de ese archivo ya no está.
 
 La visualización usa una orientación canónica con avance hacia arriba:
 
@@ -79,7 +79,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.8.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.8.2 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -131,9 +131,11 @@ Consulta `COPYING.txt`, `DATA_SOURCES.md`, `OPENINGS_CC0_LICENSE.txt`, `MASTER_G
 
 Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stockfish.html` dentro de la misma dirección pública. La página comprueba el archivo JavaScript, el WASM, su tipo MIME y la respuesta `uciok`.
 
-## Cambios v2.8.1
+## Cambios v2.8.2
 
-- La galería del Alfabeto Estructural conserva sus 256 códigos y su funcionamiento, pero ahora usa tableros 6×6 con la ventana 4×4 centrada.
+- El Alfabeto Estructural admite ahora el estado `9` = peón ausente, elevando el espacio teórico de 256 a 625 microestructuras.
+- Las métricas ignoran el `9` como altura; los tramos de gradiente que cruzan una ausencia se muestran como `—`.
+- La tarjeta ampliada incorpora navegación anterior/siguiente mediante botones ←/→ y teclado.
 - Los peones de la galería usan el recurso `public/pieces/alpha/wP.png` incluido en OmegaZero.
 - El color semántico se aplica como una capa sobre un tablero ajedrecístico alternado para una lectura más formal.
 - No se modificó la lógica de navegación ni el funcionamiento de los demás botones.

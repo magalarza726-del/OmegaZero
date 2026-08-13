@@ -1,4 +1,4 @@
-# Publicar OmegaZero v2.8.1 en GitHub Pages
+# Publicar OmegaZero v2.8.2 en GitHub Pages
 
 Esta edición usa rutas relativas a `public/` y funciona incluso cuando GitHub Pages publica el proyecto bajo una dirección como:
 
@@ -33,7 +33,7 @@ Al abrir la página deben cumplirse estas tres señales:
 
 - El logo aparece en la cabecera y en la portada.
 - La esquina superior derecha cambia a **Motor listo · Stockfish 18**.
-- La cabecera muestra **v2.8.1**.
+- La cabecera muestra **v2.8.2**.
 
 Las rutas esperadas, sustituyendo tu usuario y repositorio, son:
 
