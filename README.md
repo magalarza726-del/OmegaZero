@@ -1,4 +1,4 @@
-# OmegaZero v2.8.0 — Aplicación web personal
+# OmegaZero v2.8.1 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -79,7 +79,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.8.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.8.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -130,3 +130,10 @@ Consulta `COPYING.txt`, `DATA_SOURCES.md`, `OPENINGS_CC0_LICENSE.txt`, `MASTER_G
 ## Diagnóstico del motor
 
 Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stockfish.html` dentro de la misma dirección pública. La página comprueba el archivo JavaScript, el WASM, su tipo MIME y la respuesta `uciok`.
+
+## Cambios v2.8.1
+
+- La galería del Alfabeto Estructural conserva sus 256 códigos y su funcionamiento, pero ahora usa tableros 6×6 con la ventana 4×4 centrada.
+- Los peones de la galería usan el recurso `public/pieces/alpha/wP.png` incluido en OmegaZero.
+- El color semántico se aplica como una capa sobre un tablero ajedrecístico alternado para una lectura más formal.
+- No se modificó la lógica de navegación ni el funcionamiento de los demás botones.
