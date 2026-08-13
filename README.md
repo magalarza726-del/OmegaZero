@@ -1,4 +1,4 @@
-# OmegaZero v2.8.4 — Aplicación web personal
+# OmegaZero v2.8.5 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -79,7 +79,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.8.4 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.8.5 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -141,15 +141,12 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - No se modificó la lógica de navegación ni el funcionamiento de los demás botones.
 
 
-## Cambios v2.8.4
+## Cambios v2.8.5
 
-- Corrige la pérdida del tema de tablero en la tarjeta ampliada de microestructuras.
-- La ficha analítica se reduce a cuatro indicadores: espacio azul, control verde, frente naranja y gradiente.
-- Añade una explicación formal del gradiente y mantiene el morado como última prioridad para columnas abiertas.
-
-
-- La retaguardia de las microestructuras pasa de celeste a azul para distinguirla mejor del color base del tablero.
-- Los archivos cuyo estado es `9` se visualizan en morado como columnas abiertas.
-- Prioridad visual de capas: azul/naranja → verde → morado; la columna abierta queda pintada al final.
-- El tablero 6×6 del Alfabeto Estructural hereda automáticamente el color de tablero seleccionado en Configuración.
-- Los cambios están confinados al módulo de microestructuras y sus estilos; no se alteró la lógica de los demás botones.
+- Corrige definitivamente la prioridad cromática del Alfabeto Estructural: `azul/naranja < morado < verde`; una casilla controlada permanece verde aunque pertenezca a una columna abierta.
+- Mantiene la sincronización del tablero 6×6 con el color seleccionado en Configuración.
+- La ficha ampliada conserva únicamente cuatro indicadores: espacio azul, control verde, frente naranja y gradiente, con su explicación formal.
+- Añade anotaciones tipo Lichess solo dentro de la galería: círculo con clic derecho, flecha con arrastre derecho; en pantalla táctil, toque y arrastre.
+- Reutiliza los mismos cuatro colores de anotación ya existentes (rojo, amarillo, verde y azul) y añade un botón para limpiar las anotaciones.
+- Las anotaciones se conservan al pasar a la tarjeta anterior o siguiente durante la sesión.
+- No se modifica el funcionamiento de los tableros, botones ni anotaciones de los demás módulos.
