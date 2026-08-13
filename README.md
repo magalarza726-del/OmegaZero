@@ -1,4 +1,4 @@
-# OmegaZero v2.8.3 — Aplicación web personal
+# OmegaZero v2.8.4 — Aplicación web personal
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -79,7 +79,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.8.3 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 2.8.4 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -141,7 +141,12 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - No se modificó la lógica de navegación ni el funcionamiento de los demás botones.
 
 
-## Cambios v2.8.3
+## Cambios v2.8.4
+
+- Corrige la pérdida del tema de tablero en la tarjeta ampliada de microestructuras.
+- La ficha analítica se reduce a cuatro indicadores: espacio azul, control verde, frente naranja y gradiente.
+- Añade una explicación formal del gradiente y mantiene el morado como última prioridad para columnas abiertas.
+
 
 - La retaguardia de las microestructuras pasa de celeste a azul para distinguirla mejor del color base del tablero.
 - Los archivos cuyo estado es `9` se visualizan en morado como columnas abiertas.
