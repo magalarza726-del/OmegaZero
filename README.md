@@ -1,4 +1,11 @@
-# OmegaZero v2.8.6 — Aplicación web personal
+# OmegaZero v3.1.0
+
+## Arquitectura v3
+
+La aplicación se organiza alrededor de tres áreas de producto: **Jugar**, **Aprender** e **Investigar**. `main.js` es ahora un composition root pequeño; las funciones de UI y dominio viven en módulos de `features/`, mientras que la lógica matemática reutilizable permanece en `core/`.
+
+El proyecto incluye una suite de pruebas con `npm test` y un control automático para mantener el repositorio por debajo de 100 archivos.
+
 
 OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir partidas propias o magistrales en entrenamiento estratégico. Funciona enteramente en el navegador con Stockfish 18 local.
 
@@ -15,22 +22,21 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 - Personalización de tableros, piezas, anotaciones y sonidos.
 - Persistencia local mediante IndexedDB.
 - Laboratorio **Transformada de Stockfish** con matriz posición-control, propiedades algebraicas, funciones escalares/matriciales y gráfica por semijugada.
-- **Alfabeto estructural de peones**: galería interactiva de 625 microestructuras usando los estados `0`, `1`, `2`, `3` y `9`, con mapa cromático objetivo y detalle geométrico por estructura.
+- **Estudiar estructuras**: familias geométricas de peones, piezas menores y piezas mayores; conserva códigos exactos como ejemplos, gradientes y mapas de control sincronizados con el tema del tablero.
 
 
 
-## Alfabeto estructural de peones
+## Estudiar estructuras
 
-Desde Inicio, la tarjeta **Alfabeto estructural** abre una galería generada algorítmicamente con las 625 combinaciones teóricas de cuatro archivos contiguos. Cada dígito usa `0`–`3` para el avance desde la posición inicial y `9` para indicar que el peón de ese archivo ya no está.
+Desde **Investigar → Estudiar estructuras**, OmegaZero divide la taxonomía en tres módulos:
 
-La visualización usa una orientación canónica con avance hacia arriba:
+- **Peones**: conserva el tablero 6×6, los estados `0`, `1`, `2`, `3`, `9`, las capas azul/verde/naranja/morada y las anotaciones. Los códigos se agrupan por patrón de presencia y signo del gradiente 1D.
+- **Piezas menores**: `CD · AD · AR · CR` en tablero 8×8, con ubicaciones limitadas a filas 2–5. Las familias usan la dirección de los tres vectores del gradiente 2D.
+- **Piezas mayores**: `TD · D · R · TR` en tablero 8×8, con ubicaciones limitadas a filas 1–3. El rey se incluye por su relación geométrica con la retaguardia.
 
-- azul claro: casillas situadas detrás del peón de ese archivo;
-- verde: casillas atacadas por un peón y, por tanto, posibles casillas de captura o apoyo;
-- naranja: casillas situadas delante del peón que no están controladas por el propio bloque;
-- `2`: casilla sometida a doble control de peones.
+Cada familia conserva un representante y hasta diez ejemplos adicionales. En los tableros de piezas, **verde claro** representa control hacia delante y **azul** control hacia atrás. Todos los tableros heredan el color seleccionado en Configuración.
 
-Los márgenes laterales tenues permiten ver ataques que salen de los cuatro archivos estudiados. Al abrir una estructura se muestran, sin asignar valoración buena/mala, el avance acumulado, profundidad geométrica, gradiente, control, doble control, peones apoyados, retaguardia y frente no controlado.
+La agrupación es descriptiva: la magnitud exacta del gradiente permanece visible en cada ejemplo aunque la familia utilice solo su dirección para evitar miles de casi-duplicados.
 
 
 ## Gráficas por función y selector a/A
@@ -79,7 +85,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 2.8.6 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 3.1.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -94,21 +100,18 @@ Consulta [GUIA_GITHUB_PAGES.md](GUIA_GITHUB_PAGES.md).
 
 ## Desarrollo local
 
-Requiere Node.js 22 o superior.
+La aplicación es estática y no requiere compilación. Para servirla localmente desde la raíz del proyecto puedes usar, por ejemplo:
 
 ```bash
-npm ci
-npm run dev
+python -m http.server 8000
 ```
 
-Para probar exactamente la compilación que se publicará:
+Luego abre `http://localhost:8000/`. Para ejecutar las pruebas se requiere Node.js 22 o superior:
 
 ```bash
-npm run build
-npm run preview
+npm test
 ```
 
-En Windows también puedes ejecutar `INICIAR.bat`.
 
 ## Datos personales
 
@@ -116,12 +119,13 @@ Las partidas, problemas, preferencias e imágenes personalizadas se guardan en e
 
 ## Estructura
 
-- `src/`: aplicación.
-- `public/`: Stockfish, manifest e imágenes.
+- `assets/v3.1.0-20260815173000/`: código JavaScript y CSS versionado de la aplicación.
+- `assets/.../features/`: módulos de UI y flujos de producto.
+- `assets/.../core/`: lógica matemática y de dominio reutilizable.
+- `public/`: Stockfish, manifest, logotipos y piezas.
 - `tests/`: pruebas de regresión.
-- `scripts/`: construcción y servidor local.
-- `.github/workflows/`: pruebas y publicación automática.
-- `dist/`: salida generada; no se versiona.
+- `.github/workflows/`: ejecución automática de pruebas.
+
 
 ## Licencias y fuentes
 
@@ -141,7 +145,17 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - No se modificó la lógica de navegación ni el funcionamiento de los demás botones.
 
 
-## Cambios v2.8.6
+## Cambios v3.1.0
+
+- **Alfabeto estructural** pasa a llamarse **Estudiar estructuras** dentro de Investigar.
+- Se añade una portada con Peones, Piezas menores y Piezas mayores.
+- Los peones pasan de la galería plana a familias de gradiente 1D sin modificar su tablero 6×6 ni sus capas analíticas.
+- Se incorporan tableros 8×8 para piezas menores (filas 2–5) y mayores (filas 1–3).
+- Las piezas se agrupan por dirección del gradiente 2D y cada familia muestra un representante y hasta diez ejemplos.
+- Los nuevos tableros heredan el tema activo y separan control frontal (verde claro) y posterior (azul).
+- Se añaden pruebas de familias, límites de filas, gradientes y control.
+
+## Cambios v3.0.0
 
 - El filtro de la Galería Estructural conserva su consulta al perder el foco, abrir/cerrar tarjetas y ante rerenders de la vista.
 - Se añade la casilla **Pintar columnas abiertas (morado)**; desactivarla oculta solo esa capa visual y no modifica el estado `9` ni las métricas.

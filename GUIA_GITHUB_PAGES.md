@@ -1,59 +1,46 @@
-# Publicar OmegaZero v2.8.6 en GitHub Pages
+# Publicar OmegaZero v3.1.0 en GitHub Pages
 
-Esta edición usa rutas relativas a `public/` y funciona incluso cuando GitHub Pages publica el proyecto bajo una dirección como:
+La aplicación usa rutas relativas y puede publicarse directamente desde la raíz del repositorio, incluso bajo una URL como `https://USUARIO.github.io/REPOSITORIO/`.
 
-`https://USUARIO.github.io/OmegaZero/`
+## Publicación desde la web de GitHub
 
-No depende de `127.0.0.1`, Python ni un servidor propio.
+1. Sube **todo el contenido** del ZIP a la rama `main`.
+2. Comprueba que en la raíz estén `index.html`, `assets/`, `public/`, `package.json` y `.nojekyll`.
+3. En **Settings → Pages**, selecciona **Deploy from a branch**.
+4. Elige `main` y `/(root)`.
+5. Guarda y espera la publicación.
 
-## Método A — Solo desde la web de GitHub (recomendado)
+La versión v3.1.0 contiene menos de 100 archivos para seguir siendo cómoda de subir desde la interfaz web de GitHub.
 
-1. Abre tu repositorio.
-2. Usa **Add file → Upload files** y reemplaza los archivos con el contenido de esta versión.
-3. Comprueba que en la raíz estén `index.html`, `src/` y `public/`.
-4. Entra en **Settings → Pages**.
-5. En **Source**, selecciona **Deploy from a branch**.
-6. Selecciona la rama `main` y la carpeta `/(root)`.
-7. Pulsa **Save**.
-8. Espera unos minutos y abre la URL mostrada por GitHub.
+## Pruebas
 
-Este método no necesita la carpeta oculta `.github` ni Node.js. Es el más cómodo cuando todo se administra desde el navegador.
+Si trabajas desde un PC con Node.js 22 o superior:
 
-## Método B — GitHub Actions
+```bash
+npm test
+```
 
-1. Asegúrate de subir `.github/workflows/deploy-pages.yml`.
-2. En **Settings → Pages → Source**, selecciona **GitHub Actions**.
-3. Abre **Actions → Probar y publicar OmegaZero** y espera a que termine en verde.
-
-El flujo ejecuta pruebas, construye `dist/` y publica esa compilación.
+El workflow `.github/workflows/test.yml` ejecuta automáticamente la misma suite en cada push y pull request. Ese workflow **prueba el proyecto; no modifica la configuración de GitHub Pages**.
 
 ## Verificación rápida
 
-Al abrir la página deben cumplirse estas tres señales:
+Al abrir la página deben aparecer las tres áreas principales: **Jugar**, **Aprender** e **Investigar**. La cabecera debe mostrar **v3.1.0** y, tras cargar el WASM, el estado del motor debería pasar a **Motor listo · Stockfish 18**.
 
-- El logo aparece en la cabecera y en la portada.
-- La esquina superior derecha cambia a **Motor listo · Stockfish 18**.
-- La cabecera muestra **v2.8.6**.
+Las rutas públicas importantes son relativas al repositorio:
 
-Las rutas esperadas, sustituyendo tu usuario y repositorio, son:
+- `public/omegazero-logo.png`
+- `public/engine/stockfish-18-lite-single.js`
+- `public/engine/stockfish-18-lite-single.wasm`
 
-- `https://USUARIO.github.io/REPOSITORIO/public/omegazero-logo.png`
-- `https://USUARIO.github.io/REPOSITORIO/public/engine/stockfish-18-lite-single.js`
-- `https://USUARIO.github.io/REPOSITORIO/public/engine/stockfish-18-lite-single.wasm`
+## Actualizar una versión existente
 
-Si alguna devuelve 404, vuelve a subir la carpeta `public` completa.
+1. Exporta un respaldo desde Configuración si quieres una copia externa de tus datos.
+2. Reemplaza los archivos del repositorio por los de la nueva versión.
+3. Haz commit.
+4. Espera la republicación y recarga la página.
 
-## Actualizar desde la web
+Las partidas y preferencias continúan usando el mismo namespace de almacenamiento `omegazero:v2`, de modo que la refactorización v3 no borra deliberadamente los datos existentes del navegador.
 
-1. **Add file → Upload files**.
-2. Arrastra todos los archivos de la nueva versión.
-3. Confirma el reemplazo y crea el commit.
-4. Espera la republicación y recarga con `Ctrl + Shift + R`.
+## Estructura
 
-## Datos personales
-
-Partidas, estadísticas y preferencias viven en IndexedDB dentro de cada navegador y dirección web. Reemplazar archivos del repositorio no las borra. Cambiar el nombre del repositorio sí crea un origen diferente; antes de hacerlo exporta un respaldo desde Configuración.
-
-
-### Galería estructural v2.8.6
-La galería conserva el filtro aunque el campo pierda el foco, permite activar o desactivar la capa morada de columnas abiertas y mantiene prioridad verde sobre morado. Las anotaciones tipo Lichess siguen disponibles en la vista ampliada.
+Consulta `ARCHITECTURE.md` para la separación por módulos y `TESTING.md` para la suite de pruebas.

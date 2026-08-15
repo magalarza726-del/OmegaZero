@@ -1,18 +1,10 @@
 {
-  "name": "omegazero-chess-web",
-  "version": "2.6.0",
+  "name": "omegazero",
+  "version": "3.1.0",
   "private": true,
   "type": "module",
-  "license": "GPL-3.0-only",
-  "description": "OmegaZero: aplicación web personal de ajedrez, análisis y entrenamiento autogenerado.",
-  "engines": {
-    "node": ">=22.0.0"
-  },
   "scripts": {
-    "dev": "node scripts/serve.mjs . 5173",
-    "build": "node scripts/build.mjs",
-    "preview": "node scripts/serve.mjs dist 4173",
-    "test": "node --test tests/*.test.js",
-    "check": "npm test && npm run build"
-  }
+    "test": "node --test tests/*.test.js"
+  },
+  "description": "Laboratorio ajedrecístico: Jugar, Aprender e Investigar."
 }
