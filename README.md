@@ -1,4 +1,4 @@
-# OmegaZero v3.1.1
+# OmegaZero v3.3.0
 
 ## Arquitectura v3
 
@@ -28,13 +28,14 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 
 ## Estudiar estructuras
 
-Desde **Investigar → Estudiar estructuras**, OmegaZero divide la taxonomía en tres módulos:
+Desde **Investigar → Estudiar estructuras**, OmegaZero combina tres catálogos curados y un laboratorio libre:
 
 - **Peones**: conserva el tablero 6×6, los estados `0`, `1`, `2`, `3`, `9`, las capas azul/verde/naranja/morada y las anotaciones. Los códigos se agrupan por patrón de presencia y signo del gradiente 1D.
 - **Piezas menores**: `CD · AD · AR · CR` en tablero 8×8, con ubicaciones limitadas a filas 2–5. Las familias usan la dirección de los tres vectores del gradiente 2D.
 - **Piezas mayores**: `TD · D · R · TR` en tablero 8×8, con ubicaciones limitadas a filas 1–3. El rey se incluye por su relación geométrica con la retaguardia.
+- **Piezas libres**: permite elegir de 1 a 4 caballos, alfiles, torres, damas o reyes, con repeticiones. La ventana vertical puede ubicarse en cualquier fila 1–8 y tener amplitud máxima de cuatro filas. Las configuraciones se agrupan automáticamente por composición, gradiente direccional, topología de alineaciones y baterías.
 
-Cada familia conserva un representante y hasta diez ejemplos adicionales. En los tableros de piezas, **verde claro** representa control hacia delante y **azul** control hacia atrás. Todos los tableros heredan el color seleccionado en Configuración.
+Cada familia conserva un representante y hasta diez ejemplos adicionales. En **Acción**, verde = control de 1 pieza, azul = 2 y morado = 3 o más. En **Subacción**, amarillo = una pieza compatible detrás de la principal, naranja = dos y rojo = tres. Todos los tableros heredan el color seleccionado en Configuración.
 
 La agrupación es descriptiva: la magnitud exacta del gradiente permanece visible en cada ejemplo aunque la familia utilice solo su dirección para evitar miles de casi-duplicados.
 
@@ -85,7 +86,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 3.1.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 3.3.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -119,7 +120,7 @@ Las partidas, problemas, preferencias e imágenes personalizadas se guardan en e
 
 ## Estructura
 
-- `assets/v3.1.1-20260815182000/`: código JavaScript y CSS versionado de la aplicación.
+- `assets/v3.3.0-20260816051000/`: código JavaScript y CSS versionado de la aplicación.
 - `assets/.../features/`: módulos de UI y flujos de producto.
 - `assets/.../core/`: lógica matemática y de dominio reutilizable.
 - `public/`: Stockfish, manifest, logotipos y piezas.
@@ -167,3 +168,13 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - Estudiar estructuras permite alternar entre **Lista** y **Galería**.
 - La preferencia de visualización se guarda y se comparte entre Peones, Piezas menores y Piezas mayores.
 - La Galería carga las vistas previas de los tableros de forma diferida para evitar renderizar cientos de tableros fuera de pantalla.
+
+
+## Cambios v3.3.0
+
+- Se añade **Piezas libres** dentro de Estudiar estructuras.
+- El usuario puede escoger 1–4 piezas, incluso repetidas, y una ventana vertical entre filas 1–8 con amplitud máxima de cuatro.
+- Un Web Worker agrupa configuraciones normalizadas sin bloquear la interfaz en los casos grandes.
+- La firma de familia combina composición, gradiente direccional, topología de alineaciones y baterías; los reflejos horizontales pueden considerarse equivalentes.
+- Nuevo selector **Acción / Subacción**. Acción usa verde/azul/morado según multiplicidad de control; Subacción usa amarillo/naranja/rojo según profundidad de soporte tras la pieza principal.
+- Dama+torre, dama+alfil, torre+torre, alfil+alfil y combinaciones compatibles forman baterías; caballos y reyes no producen subacción lineal.

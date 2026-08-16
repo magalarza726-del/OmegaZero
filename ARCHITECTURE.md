@@ -1,4 +1,4 @@
-# Arquitectura de OmegaZero v3.2.0
+# Arquitectura de OmegaZero v3.3.0
 
 ## Principio
 
@@ -17,7 +17,10 @@
 - `features/play.js`: partidas y simultáneas.
 - `features/learn.js`: análisis y entrenamiento estratégico.
 - `features/library.js`: biblioteca, importación y personalización.
-- `features/structureStudy.js`: entrada a Estudiar estructuras y galerías de familias de piezas menores/mayores.
+- `features/structureStudy.js`: entrada a Estudiar estructuras y galerías curadas de piezas menores/mayores.
+- `features/freeStructureStudy.js`: laboratorio de piezas libres, configuración de filas, Acción/Subacción y navegación de familias.
+- `core/freePieceStructures.js`: normalización espacial, firma canónica, mapas de Acción/Subacción y generación de familias libres.
+- `workers/freeStructureWorker.js`: agrupación de universos libres fuera del hilo principal.
 - `features/pawnGallery.js`: familias de peones, tableros 6×6 y detalle/anotaciones de códigos concretos.
 - `features/energyAnalysis.js`: laboratorio U/K/E, historial energético y modos E-COM.
 - `core/energyChess.js`: masa, altura, movilidad legal, U, K, E y selección E-COM a una semijugada.
@@ -35,8 +38,9 @@ La UI nunca necesita renderizar todas las configuraciones exactas de piezas. El 
 - Peones: patrón de presencia + signo del gradiente 1D.
 - Piezas menores: `CD · AD · AR · CR`, filas 2–5, familia por dirección de los tres vectores del gradiente 2D.
 - Piezas mayores: `TD · D · R · TR`, filas 1–3, familia por dirección de los tres vectores del gradiente 2D.
+- Piezas libres: 1–4 piezas repetidas o distintas, ventana de 1–4 filas ubicada entre 1 y 8; familia por composición + gradiente + topología + baterías.
 
-Los tableros heredan `--light` y `--dark` del tema activo. En Estudiar estructuras, verde = control por una pieza, azul = control por dos piezas y morado = control por tres o más piezas.
+Los tableros heredan `--light` y `--dark` del tema activo. En Acción, verde = control por una pieza, azul = dos y morado = tres o más. En Subacción, amarillo/naranja/rojo representan uno/dos/tres soportes compatibles detrás de la pieza principal.
 
 
 ## Análisis energético
@@ -51,7 +55,7 @@ El modelo implementa `U = mgh`, `K = ½mv²` y `E = U + K`, con `v` definido com
 
 ## Restricción de archivos
 
-La suite de tests falla si el repositorio llega a 100 archivos. OmegaZero v3.2.0 se mantiene por debajo de ese límite.
+La suite de tests falla si el repositorio llega a 100 archivos. OmegaZero v3.3.0 se mantiene por debajo de ese límite.
 
 ## Pruebas
 

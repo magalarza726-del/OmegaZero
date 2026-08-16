@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { determinant, matrixMultiply, matrixInverse, identityMatrix } from '../assets/v3.2.0-20260816035000/core/algebraicChess.js';
-import { normalizeFiniteSeries, finiteExtent } from '../assets/v3.2.0-20260816035000/core/seriesMath.js';
-import { stableTransformScore } from '../assets/v3.2.0-20260816035000/core/tcom.js';
+import { determinant, matrixMultiply, matrixInverse, identityMatrix } from '../assets/v3.3.0-20260816051000/core/algebraicChess.js';
+import { normalizeFiniteSeries, finiteExtent } from '../assets/v3.3.0-20260816051000/core/seriesMath.js';
+import { stableTransformScore } from '../assets/v3.3.0-20260816051000/core/tcom.js';
 
 const near=(a,b,eps=1e-8)=>assert.ok(Math.abs(a-b)<eps,`${a} ≉ ${b}`);
 

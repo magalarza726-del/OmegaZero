@@ -4,7 +4,7 @@ import {
   buildPawnFamilies, buildMinorFamilies, buildMajorFamilies,
   pawnFamilySignature, pieceFamilySignature, analyzePieceConfiguration,
   gradient2D, gradientDirection,
-} from '../assets/v3.2.0-20260816035000/core/structureFamilies.js';
+} from '../assets/v3.3.0-20260816051000/core/structureFamilies.js';
 
 test('las 625 estructuras de peones se agrupan en familias de gradiente 1D',()=>{
   const families=buildPawnFamilies();
