@@ -1,4 +1,4 @@
-# Publicar OmegaZero v3.1.0 en GitHub Pages
+# Publicar OmegaZero v3.1.1 en GitHub Pages
 
 La aplicación usa rutas relativas y puede publicarse directamente desde la raíz del repositorio, incluso bajo una URL como `https://USUARIO.github.io/REPOSITORIO/`.
 
@@ -10,7 +10,7 @@ La aplicación usa rutas relativas y puede publicarse directamente desde la raí
 4. Elige `main` y `/(root)`.
 5. Guarda y espera la publicación.
 
-La versión v3.1.0 contiene menos de 100 archivos para seguir siendo cómoda de subir desde la interfaz web de GitHub.
+La versión v3.1.1 contiene menos de 100 archivos para seguir siendo cómoda de subir desde la interfaz web de GitHub.
 
 ## Pruebas
 
@@ -24,7 +24,7 @@ El workflow `.github/workflows/test.yml` ejecuta automáticamente la misma suite
 
 ## Verificación rápida
 
-Al abrir la página deben aparecer las tres áreas principales: **Jugar**, **Aprender** e **Investigar**. La cabecera debe mostrar **v3.1.0** y, tras cargar el WASM, el estado del motor debería pasar a **Motor listo · Stockfish 18**.
+Al abrir la página deben aparecer las tres áreas principales: **Jugar**, **Aprender** e **Investigar**. La cabecera debe mostrar **v3.1.1** y, tras cargar el WASM, el estado del motor debería pasar a **Motor listo · Stockfish 18**.
 
 Las rutas públicas importantes son relativas al repositorio:
 

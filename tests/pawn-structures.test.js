@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PAWN_STRUCTURE_CODES, decodePawnStructure, analyzePawnStructure } from '../assets/v3.1.0-20260815173000/core/pawnStructures.js';
+import { PAWN_STRUCTURE_CODES, decodePawnStructure, analyzePawnStructure } from '../assets/v3.2.0-20260816035000/core/pawnStructures.js';
 
 test('el alfabeto contiene exactamente 625 códigos únicos',()=>{
   assert.equal(PAWN_STRUCTURE_CODES.length,625);

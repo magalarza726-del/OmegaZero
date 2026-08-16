@@ -1,4 +1,4 @@
-# OmegaZero v3.1.0
+# OmegaZero v3.1.1
 
 ## Arquitectura v3
 
@@ -85,7 +85,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 3.1.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 3.1.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -119,7 +119,7 @@ Las partidas, problemas, preferencias e imágenes personalizadas se guardan en e
 
 ## Estructura
 
-- `assets/v3.1.0-20260815173000/`: código JavaScript y CSS versionado de la aplicación.
+- `assets/v3.1.1-20260815182000/`: código JavaScript y CSS versionado de la aplicación.
 - `assets/.../features/`: módulos de UI y flujos de producto.
 - `assets/.../core/`: lógica matemática y de dominio reutilizable.
 - `public/`: Stockfish, manifest, logotipos y piezas.
@@ -162,3 +162,8 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - La preferencia de mostrar morado se guarda en la configuración local.
 - Se refuerza explícitamente la prioridad visual del verde sobre el morado cuando ambas capas coinciden.
 - Se conservan las 625 microestructuras, la navegación, las anotaciones tipo Lichess y el resto de módulos sin cambios funcionales.
+## Cambios v3.1.1
+
+- Estudiar estructuras permite alternar entre **Lista** y **Galería**.
+- La preferencia de visualización se guarda y se comparte entre Peones, Piezas menores y Piezas mayores.
+- La Galería carga las vistas previas de los tableros de forma diferida para evitar renderizar cientos de tableros fuera de pantalla.

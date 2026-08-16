@@ -16,7 +16,7 @@ test('todos los módulos de features enlazan sus imports y exportan métodos', a
   const names = new Set();
   let total = 0;
   for (const moduleName of modules) {
-    const mod = await import(`../assets/v3.1.0-20260815173000/features/${moduleName}.js`);
+    const mod = await import(`../assets/v3.2.0-20260816035000/features/${moduleName}.js`);
     const methods = mod[`${moduleName}Methods`];
     assert.ok(methods && typeof methods === 'object', moduleName);
     for (const [name, fn] of Object.entries(methods)) {
