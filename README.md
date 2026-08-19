@@ -1,4 +1,4 @@
-# OmegaZero v3.5.0
+# OmegaZero v3.5.1
 
 ## Arquitectura v3
 
@@ -87,7 +87,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 3.5.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 3.5.1 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -121,7 +121,7 @@ Las partidas, problemas, preferencias e imágenes personalizadas se guardan en e
 
 ## Estructura
 
-- `assets/v3.5.0-20260819043000/`: código JavaScript y CSS versionado de la aplicación.
+- `assets/v3.5.1-20260819051500/`: código JavaScript y CSS versionado de la aplicación.
 - `assets/.../features/`: módulos de UI y flujos de producto.
 - `assets/.../core/`: lógica matemática y de dominio reutilizable.
 - `public/`: Stockfish, manifest, logotipos y piezas.

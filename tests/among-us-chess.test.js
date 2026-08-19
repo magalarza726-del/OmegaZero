@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   hiddenEloGuessOutcome, hiddenEloGuessWindow, nextEffectiveElo,
   eloToSkill, eloToDepth, chooseHiddenEloCandidate,
-} from '../assets/v3.5.0-20260819043000/core/hiddenEloChess.js';
+} from '../assets/v3.5.1-20260819051500/core/hiddenEloChess.js';
 
 test('la acusación usa los umbrales ±100 / ±200',()=>{
   assert.equal(hiddenEloGuessOutcome(1800,1700).key,'win');
@@ -37,4 +38,14 @@ test('la selección probabilística conserva una candidata legal del conjunto',(
   const candidates=[{uci:'e2e4',score:40},{uci:'d2d4',score:30},{uci:'g1f3',score:10}];
   const chosen=chooseHiddenEloCandidate(candidates,'w',1800,()=>.6);
   assert.ok(candidates.some(c=>c.uci===chosen.uci));
+});
+
+
+test('Among Us reutiliza la interfaz de simultáneas y el sistema común de anotaciones',()=>{
+  const source=readFileSync(new URL('../assets/v3.5.1-20260819051500/features/amongUsChess.js',import.meta.url),'utf8');
+  assert.ok(source.includes('game-layout simultaneous-game among-simultaneous'));
+  assert.ok(source.includes('sim-board-tabs'));
+  assert.ok(source.includes('this.annotationPanel()'));
+  assert.ok(source.includes("this.startRightAnnotation(event,cell.dataset.square,'amongUs')"));
+  assert.ok(source.includes('this.startVisualDrag(event,cell.dataset.square'));
 });

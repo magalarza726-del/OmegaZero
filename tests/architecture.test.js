@@ -5,7 +5,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const asset=join(repo,'assets','v3.5.0-20260819043000');
+const asset=join(repo,'assets','v3.5.1-20260819051500');
 function files(dir){return readdirSync(dir).flatMap(name=>{const p=join(dir,name);return statSync(p).isDirectory()?files(p):[p]})}
 
 test('el repositorio se mantiene por debajo del límite de 100 archivos',()=>{
@@ -42,7 +42,7 @@ test('Estudiar estructuras ofrece vista Lista y Galería persistente',()=>{
 
 test('la página de producción apunta solo al build v3',()=>{
   const html=readFileSync(join(repo,'index.html'),'utf8');
-  assert.ok(html.includes('v3.5.0-20260819043000'));
+  assert.ok(html.includes('v3.5.1-20260819051500'));
   assert.ok(!html.includes('v3.0.0-20260813083000'));
   assert.ok(!html.includes('v2.8.6-20260812215800'));
 });

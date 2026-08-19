@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeStructureBoard, standardEditorPosition } from '../assets/v3.5.0-20260819043000/core/structureBoardEditor.js';
+import { readFileSync } from 'node:fs';
+import { analyzeStructureBoard, standardEditorPosition } from '../assets/v3.5.1-20260819051500/core/structureBoardEditor.js';
 
 test('el editor analiza un solo bando y conserva al rival como bloqueador',()=>{
   const pieces=[{color:'w',type:'r',square:'a1'},{color:'b',type:'p',square:'a4'},{color:'b',type:'r',square:'h8'}];
@@ -48,4 +49,12 @@ test('la posición inicial del editor contiene las 32 piezas',()=>{
   const position=standardEditorPosition();
   assert.equal(position.length,32);
   assert.equal(new Set(position.map(piece=>piece.square)).size,32);
+});
+
+
+test('el editor estructural usa un fantasma de arrastre suave sin exigir legalidad ajedrecística',()=>{
+  const source=readFileSync(new URL('../assets/v3.5.1-20260819051500/features/structureBoardEditor.js',import.meta.url),'utf8');
+  assert.ok(source.includes("ghost.className='drag-ghost structure-editor-drag-ghost'"));
+  assert.ok(source.includes("document.elementFromPoint(event.clientX,event.clientY)?.closest?.('[data-editor-square]')"));
+  assert.ok(!source.includes("moves({square:drag.from"));
 });

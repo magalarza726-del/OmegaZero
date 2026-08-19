@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildGameStats, buildTrainingStats, estimateWdl } from '../assets/v3.5.0-20260819043000/core/statistics.js';
+import { buildGameStats, buildTrainingStats, estimateWdl } from '../assets/v3.5.1-20260819051500/core/statistics.js';
 
 test('estadísticas vacías no producen NaN',()=>{
   const games=buildGameStats([]),training=buildTrainingStats([]);

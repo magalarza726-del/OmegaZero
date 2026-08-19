@@ -1,4 +1,4 @@
-# Arquitectura de OmegaZero v3.5.0
+# Arquitectura de OmegaZero v3.5.1
 
 ## Principio
 
@@ -55,7 +55,7 @@ El modelo implementa `U = mgh`, `K = ½mv²` y `E = U + K`, con `v` definido com
 
 ## Restricción de archivos
 
-La suite de tests falla si el repositorio llega a 100 archivos. OmegaZero v3.5.0 se mantiene por debajo de ese límite.
+La suite de tests falla si el repositorio llega a 100 archivos. OmegaZero v3.5.1 se mantiene por debajo de ese límite.
 
 ## Pruebas
 
