@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Chess } from '../assets/v3.3.0-20260816051000/vendor/chess.js';
-import { analyzeEnergyPosition, chooseEnergyMoveOnePly, energyHeight } from '../assets/v3.3.0-20260816051000/core/energyChess.js';
+import { Chess } from '../assets/v3.5.0-20260819043000/vendor/chess.js';
+import { analyzeEnergyPosition, chooseEnergyMoveOnePly, energyHeight } from '../assets/v3.5.0-20260819043000/core/energyChess.js';
 
 test('la altura energética es simétrica por color',()=>{
   assert.equal(energyHeight('w',1),0);

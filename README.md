@@ -1,4 +1,4 @@
-# OmegaZero v3.3.0
+# OmegaZero v3.5.0
 
 ## Arquitectura v3
 
@@ -13,6 +13,7 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 
 - J1 vs J2, J1 vs COM y COM vs COM.
 - Hasta cinco partidas simultáneas contra configuraciones independientes.
+- **Among Us Chess**: 3–6 tableros simultáneos contra rivales con nombre, Elo y estilo ocultos; victoria posible por mate, bandera o identificación de Elo.
 - Estilos **Zero** (defensivo y de contraataque) y **Omega** (hiperagresivo y táctico).
 - Análisis continuo con variantes, barra de evaluación y calidad de jugada.
 - Estrategia desde partidas propias y partidas magistrales.
@@ -30,7 +31,7 @@ OmegaZero es una aplicación web de ajedrez para jugar, analizar y convertir par
 
 Desde **Investigar → Estudiar estructuras**, OmegaZero combina tres catálogos curados y un laboratorio libre:
 
-- **Peones**: conserva el tablero 6×6, los estados `0`, `1`, `2`, `3`, `9`, las capas azul/verde/naranja/morada y las anotaciones. Los códigos se agrupan por patrón de presencia y signo del gradiente 1D.
+- **Peones**: conserva el tablero 6×6, los estados `0`, `1`, `2`, `3`, `9`, el mapa de multiplicidad de control y las anotaciones. Los códigos se agrupan por patrón de presencia y signo del gradiente 1D.
 - **Piezas menores**: `CD · AD · AR · CR` en tablero 8×8, con ubicaciones limitadas a filas 2–5. Las familias usan la dirección de los tres vectores del gradiente 2D.
 - **Piezas mayores**: `TD · D · R · TR` en tablero 8×8, con ubicaciones limitadas a filas 1–3. El rey se incluye por su relación geométrica con la retaguardia.
 - **Piezas libres**: permite elegir de 1 a 4 caballos, alfiles, torres, damas o reyes, con repeticiones. La ventana vertical puede ubicarse en cualquier fila 1–8 y tener amplitud máxima de cuatro filas. Las configuraciones se agrupan automáticamente por composición, gradiente direccional, topología de alineaciones y baterías.
@@ -86,7 +87,7 @@ El nuevo laboratorio se abre desde Inicio o con el acceso `ƒ(A)` de la cabecera
 
 ## Publicar en GitHub Pages
 
-La versión 3.3.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
+La versión 3.5.0 funciona de dos maneras y en ambas conserva el nombre del repositorio en las rutas:
 
 **Método recomendado para subir únicamente desde la web de GitHub:**
 
@@ -120,7 +121,7 @@ Las partidas, problemas, preferencias e imágenes personalizadas se guardan en e
 
 ## Estructura
 
-- `assets/v3.3.0-20260816051000/`: código JavaScript y CSS versionado de la aplicación.
+- `assets/v3.5.0-20260819043000/`: código JavaScript y CSS versionado de la aplicación.
 - `assets/.../features/`: módulos de UI y flujos de producto.
 - `assets/.../core/`: lógica matemática y de dominio reutilizable.
 - `public/`: Stockfish, manifest, logotipos y piezas.
@@ -170,7 +171,7 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - La Galería carga las vistas previas de los tableros de forma diferida para evitar renderizar cientos de tableros fuera de pantalla.
 
 
-## Cambios v3.3.0
+## Cambios v3.5.0
 
 - Se añade **Piezas libres** dentro de Estudiar estructuras.
 - El usuario puede escoger 1–4 piezas, incluso repetidas, y una ventana vertical entre filas 1–8 con amplitud máxima de cuatro.
@@ -178,3 +179,8 @@ Si GitHub Pages muestra que el motor no está disponible, abre `diagnostico-stoc
 - La firma de familia combina composición, gradiente direccional, topología de alineaciones y baterías; los reflejos horizontales pueden considerarse equivalentes.
 - Nuevo selector **Acción / Subacción**. Acción usa verde/azul/morado según multiplicidad de control; Subacción usa amarillo/naranja/rojo según profundidad de soporte tras la pieza principal.
 - Dama+torre, dama+alfil, torre+torre, alfil+alfil y combinaciones compatibles forman baterías; caballos y reyes no producen subacción lineal.
+
+
+## Among Us Chess · v3.5.0
+
+Desde **Jugar → Among Us Chess**, J1 se enfrenta simultáneamente a 3–6 rivales con identidad oculta. Cada rival recibe un Elo real distinto entre 500 y 2500 y un estilo secreto: **Sol** puede entrar durante 1–3 turnos en ráfagas de +500 a +1000 Elo efectivo, **Tierra** permanece cerca de su nivel real y **Luna** intenta camuflarse mediante periodos de −300 a −700. El botón **Descubrir Elo** se habilita al completar las jugadas 10, 15, 20, 25…: error ≤100 = victoria, 101–200 = tablas y >200 = derrota. Los tableros conservan relojes independientes y también pueden terminar por mate, bandera o resultado FIDE. La simulación de Elo usa Stockfish local para generar candidatas y una selección probabilística cuya dispersión depende del Elo efectivo; el cálculo real del motor se serializa para evitar competencia entre los 3–6 tableros.

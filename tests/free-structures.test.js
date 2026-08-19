@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeRowWindow, freeFamilySignature, analyzeFreePieceConfiguration,
   buildFreePieceFamilies,
-} from '../assets/v3.3.0-20260816051000/core/freePieceStructures.js';
+} from '../assets/v3.5.0-20260819043000/core/freePieceStructures.js';
 
 test('la ventana libre admite filas 1-8 con amplitud máxima de cuatro',()=>{
   assert.deepEqual(normalizeRowWindow(2,5),{start:2,end:5,height:4});
