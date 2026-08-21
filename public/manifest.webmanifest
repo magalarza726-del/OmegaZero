@@ -1,7 +1,7 @@
 {
   "name": "OmegaZero",
   "short_name": "OmegaZero",
-  "description": "Ajedrez, análisis y entrenamiento autogenerado con Zero y Omega.",
+  "description": "Chess Laboratory para jugar, aprender e investigar con Stockfish y modelos experimentales.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#07111f",
