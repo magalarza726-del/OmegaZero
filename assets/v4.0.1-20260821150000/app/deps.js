@@ -5,7 +5,7 @@ export { chooseBotCandidate } from '../scheme.js';
 export { resolveBotScheme } from '../bots.js';
 export { OPENINGS, openingOptions, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan } from '../openings.js';
 export { MASTER_GAMES, MASTER_PROBLEMS } from '../data/masterGames.js';
-export { loadDb, hydrateDb, saveDb, saveSettingsOnly, flushDb, addGame, addProblemsFromGame, getMigrationInfo, migrateLegacyData, declineLegacyMigration, clearGamesAndTraining, resetAllAppData } from '../storage.js';
+export { loadDb, hydrateDb, saveDb, flushDb, addGame, addProblemsFromGame, getMigrationInfo, migrateLegacyData, declineLegacyMigration, clearGamesAndTraining, resetAllAppData } from '../storage.js';
 export { APP_VERSION } from '../version.js';
 export { $, $$, clamp, escapeHtml as esc, uciToMove, scoreText, phaseFromFen, downloadText } from '../core/utils.js';
 export { classifyMoveQuality, validCandidates } from '../core/moveQuality.js';
@@ -14,7 +14,7 @@ export { buildGameStats, buildTrainingStats, buildPlayerEloStats, estimateWdl } 
 export { applyAccessibility, boardSquareAria, announce } from '../ui/accessibility.js';
 export { playTone } from '../ui/sounds.js';
 export { publicAsset } from '../publicAssets.js';
-export { buildPositionMatrix, algebraicProperties, buildTimelineFromPgn, splitPgnDatabase, pgnDisplayName, compileFunctionDefinitions, evaluateCompiledFunctionDefinitions, preflightFunctionDefinitions, compileScalarFunctionLine, formatNumber } from '../core/algebraicChess.js';
+export { buildPositionMatrix, algebraicProperties, buildTimelineFromPgn, splitPgnDatabase, pgnDisplayName, compileFunctionDefinitions, evaluateCompiledFunctionDefinitions, compileScalarFunctionLine, formatNumber } from '../core/algebraicChess.js';
 export { chooseTransformMoveOnePly } from '../core/tcom.js';
 export { finiteExtentOfSeries, normalizeFiniteSeries } from '../core/seriesMath.js';
 export { lruGet, lruSet } from '../core/lruCache.js';
