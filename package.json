@@ -1,1 +1,1 @@
-{"name":"omegazero","version":"4.1.0","type":"module","scripts":{"test":"node --test tests/*.test.js"}}
+{"name":"omegazero","version":"4.1.1","type":"module","scripts":{"test":"node --test tests/*.test.js"}}
