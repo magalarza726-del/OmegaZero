@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const main=fs.readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
-const version=fs.readFileSync(new URL('../src/version.js',import.meta.url),'utf8');
 const pkg=JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8'));
+const manifest=JSON.parse(fs.readFileSync(new URL('../version.json',import.meta.url),'utf8'));
+const activeVersion=fs.readFileSync(new URL(`../${manifest.assetRoot}/version.js`,import.meta.url),'utf8');
 const bat=fs.readFileSync(new URL('../INICIAR.bat',import.meta.url),'utf8');
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+
+function re(value){return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 
 test('v1.3.3 incorpora la conversión Elo que bloqueaba las pantallas de partida',()=>{
   assert.match(main,/eloForSkill\(skill\)/);
@@ -28,9 +31,11 @@ test('un error de vista muestra recuperación y no una pantalla negra',()=>{
   assert.match(main,/Reintentar/);
 });
 
-test('la versión visible y el iniciador coinciden con el paquete',()=>{
-  assert.equal(pkg.version,'2.6.0');
-  assert.match(version,/APP_VERSION = '2\.6\.0'/);
-  assert.match(bat,/v2\.6\.0/);
-  assert.match(html,/OmegaZero v2\.6\.0/);
+test('la versión visible, el build activo y el iniciador coinciden con el paquete',()=>{
+  const version=re(pkg.version);
+  assert.equal(manifest.version,pkg.version);
+  assert.match(activeVersion,new RegExp(`APP_VERSION = '${version}'`));
+  assert.match(bat,new RegExp(`OmegaZero Web v${version}`));
+  assert.match(html,new RegExp(`OmegaZero v${version}`));
+  assert.ok(html.includes(manifest.assetRoot));
 });
