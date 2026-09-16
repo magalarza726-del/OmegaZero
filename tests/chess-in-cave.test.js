@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   initialCaveState,
   caveLegalMoves,
@@ -55,4 +56,12 @@ test('the cave COM does not move out of turn or after game over',()=>{
   assert.equal(chooseCaveComMove(state,'b',{random:()=>0}),null);
   state.winner='w';
   assert.equal(chooseCaveComMove(state,'w',{random:()=>0}),null);
+});
+
+test('Cave setup uses direct buttons for J1 vs J2 and J1 vs COM',()=>{
+  const source=readFileSync(new URL('../assets/v4.2.0-20260915193000/features/chessInCaveSetupPatch.js',import.meta.url),'utf8');
+  assert.match(source,/data-cave-mode=\"pvp\"/);
+  assert.match(source,/data-cave-mode=\"pvc\"/);
+  assert.match(source,/button\.onclick=event/);
+  assert.doesNotMatch(source,/name=\"caveMode\"/);
 });

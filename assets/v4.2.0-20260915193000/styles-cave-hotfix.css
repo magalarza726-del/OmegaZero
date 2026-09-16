@@ -16,6 +16,16 @@
 @keyframes cavePulse{from{opacity:.58}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.cave-com-active .cave-board-caption{animation:none}.cave-mode-picker span{transition:none}}
 
+/* Robust setup controls: actual buttons instead of hidden radios. */
+.cave-mode-option{display:grid;gap:4px;min-height:72px;padding:13px 14px;text-align:left;border:1px solid #ffffff14;border-radius:11px;background:#02080d;color:#93a9ad;cursor:pointer;pointer-events:auto;position:relative;z-index:2;transition:border-color .18s ease,transform .18s ease,background .18s ease,box-shadow .18s ease}
+.cave-mode-option b{color:#e4c478;font-size:14px}
+.cave-mode-option small{color:#779296!important;font-size:12px}
+.cave-mode-option:hover{transform:translateY(-1px)}
+.cave-mode-option.is-active{border-color:#d7b66a88;background:linear-gradient(145deg,#0a2428,#071118);box-shadow:inset 0 0 0 1px #2bc6bf2e}
+.cave-mode-option:focus-visible,.cave-color-option:focus-visible{outline:2px solid #2bd6cf;outline-offset:2px}
+.cave-color-option{border:1px solid #ffffff1a;border-radius:8px;background:#071118;color:#91a7ac;padding:7px 11px;cursor:pointer;pointer-events:auto;position:relative;z-index:2}
+.cave-color-option.is-active{border-color:#d7b66a88;background:#0a2428;color:#f0cf75;box-shadow:inset 0 0 0 1px #2bc6bf2e}
+
 /* The fade lives inside the last visible square and the first dark square.
    It never changes hitboxes, coordinates or the information model. */
 .cave-sq{
@@ -54,4 +64,5 @@
 @media(max-width:560px){
   .cave-mode-picker{grid-template-columns:1fr}
   .cave-mode-picker span{min-height:0}
+  .cave-mode-option{min-height:0}
 }
