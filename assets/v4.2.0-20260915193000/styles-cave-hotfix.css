@@ -1,0 +1,57 @@
+/* OmegaZero Chess in the Cave · modes + soft cave boundary hotfix */
+.cave-mode-picker{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0 0 12px}
+.cave-mode-picker label{position:relative;display:block;cursor:pointer}
+.cave-mode-picker input{position:absolute;opacity:0;pointer-events:none}
+.cave-mode-picker span{display:grid;gap:3px;min-height:72px;padding:13px 14px;border:1px solid #ffffff14;border-radius:11px;background:#02080d;color:#93a9ad;transition:border-color .18s ease,transform .18s ease,background .18s ease}
+.cave-mode-picker b{color:#e4c478}
+.cave-mode-picker small{color:#779296!important}
+.cave-mode-picker input:checked+span{border-color:#d7b66a88;background:linear-gradient(145deg,#0a2428,#071118);box-shadow:inset 0 0 0 1px #2bc6bf2e}
+.cave-mode-picker label:hover span{transform:translateY(-1px)}
+.cave-color-picker{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:12px;border:1px solid #ffffff10;border-radius:10px;background:#02080d;color:#9bb0b4;font-size:12px}
+.cave-color-picker>span{margin-right:auto;color:#d7b66a;font-weight:800}
+.cave-color-picker label{display:flex!important;align-items:center!important;gap:5px!important}
+.cave-color-picker.is-hidden{display:none}
+.cave-com-active .cave-board{box-shadow:0 0 0 1px #2bc6bf24,0 0 38px #0da6a31c}
+.cave-com-active .cave-board-caption{animation:cavePulse 1.3s ease-in-out infinite alternate}
+@keyframes cavePulse{from{opacity:.58}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.cave-com-active .cave-board-caption{animation:none}.cave-mode-picker span{transition:none}}
+
+/* The fade lives inside the last visible square and the first dark square.
+   It never changes hitboxes, coordinates or the information model. */
+.cave-sq{
+  --cave-ft:transparent;--cave-fr:transparent;--cave-fb:transparent;--cave-fl:transparent;
+  --cave-gt:transparent;--cave-gr:transparent;--cave-gb:transparent;--cave-gl:transparent;
+}
+.cave-sq.cave-fade-top{--cave-ft:rgba(0,0,0,.92)}
+.cave-sq.cave-fade-right{--cave-fr:rgba(0,0,0,.92)}
+.cave-sq.cave-fade-bottom{--cave-fb:rgba(0,0,0,.92)}
+.cave-sq.cave-fade-left{--cave-fl:rgba(0,0,0,.92)}
+.cave-sq.cave-visible::after{
+  content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:
+    linear-gradient(to bottom,var(--cave-ft) 0,transparent 58%),
+    linear-gradient(to left,var(--cave-fr) 0,transparent 58%),
+    linear-gradient(to top,var(--cave-fb) 0,transparent 58%),
+    linear-gradient(to right,var(--cave-fl) 0,transparent 58%);
+}
+.cave-sq.cave-glow-top{--cave-gt:rgba(18,92,94,.42)}
+.cave-sq.cave-glow-right{--cave-gr:rgba(18,92,94,.42)}
+.cave-sq.cave-glow-bottom{--cave-gb:rgba(18,92,94,.42)}
+.cave-sq.cave-glow-left{--cave-gl:rgba(18,92,94,.42)}
+.cave-sq.cave-unseen::after{
+  content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:
+    linear-gradient(to bottom,var(--cave-gt) 0,transparent 48%),
+    linear-gradient(to left,var(--cave-gr) 0,transparent 48%),
+    linear-gradient(to top,var(--cave-gb) 0,transparent 48%),
+    linear-gradient(to right,var(--cave-gl) 0,transparent 48%),
+    #000;
+}
+.cave-sq.cave-legal::before{z-index:3}
+.cave-sq img{z-index:4}
+.cave-sq .file,.cave-sq .rank{z-index:7}
+
+@media(max-width:560px){
+  .cave-mode-picker{grid-template-columns:1fr}
+  .cave-mode-picker span{min-height:0}
+}
