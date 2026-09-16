@@ -1,0 +1,57 @@
+/* OmegaZero v4.1.1 — hotfix móvil y fallback visual seguro */
+:root{--omega-atlas-url:url("../../public/omegazero-logo.png")}
+.oz-art{background-image:url("../../public/omegazero-logo.png")!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;background-color:#071018!important}
+.oz-art-1,.oz-art-3,.oz-art-5,.oz-art-7{background-image:url("../../public/omegazero-mark.png")!important}
+.home-grid .omega-art-card{display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:flex-start!important;gap:0!important}
+.home-grid .omega-art-card>b,.home-grid .omega-art-card>span,.home-grid .omega-art-card>em{position:relative!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;z-index:2!important;max-width:calc(100% - 112px)!important}
+.home-grid .omega-art-card>span{line-height:1.08!important;margin-top:10px!important}
+.home-grid .omega-art-card>em{display:block!important;margin-top:9px!important;line-height:1.35!important;font-size:12px!important;color:#7893a4!important}
+.omega-card-art{z-index:0!important}
+.omega-art-card>b,.omega-art-card>span,.omega-art-card>em{z-index:2!important}
+.omega-art-card::before{z-index:1!important;pointer-events:none!important;background:linear-gradient(90deg,#07141ff5 0 47%,#07141fdd 66%,#07141f38 100%)!important}
+.omega-hero .hero-metrics{display:flex!important;flex-wrap:wrap!important;gap:8px 18px!important;align-items:center!important}
+.omega-hero .hero-metrics span{display:flex!important;align-items:baseline!important;gap:4px!important;white-space:nowrap!important}
+.omega-domain>header{gap:18px!important}
+@media(max-width:1050px){
+  #view{width:min(94vw,820px)!important;padding-top:28px!important}
+  .omega-card-grid,.home-grid.omega-card-grid{grid-template-columns:1fr!important}
+  .home-grid .wide{grid-column:auto!important}
+  .omega-domain>header{display:block!important}
+  .omega-domain>header>p{max-width:none!important;margin-top:10px!important}
+  .omega-art-card{min-height:132px!important;padding:18px 116px 18px 18px!important}
+  .omega-card-art,.omega-feature-card .omega-card-art{width:98px!important;right:10px!important;top:50%!important;translate:0 -50%!important}
+  .omega-library-card .omega-card-art{width:102px!important;right:10px!important}
+  .home-grid .omega-art-card>b,.home-grid .omega-art-card>span,.home-grid .omega-art-card>em{max-width:100%!important;padding-right:0!important}
+  .home-grid .omega-art-card>span,.home-grid .omega-art-card>em{max-width:calc(100% - 2px)!important}
+  .omega-art-card>b,.omega-art-card>span,.omega-art-card>em{width:calc(100% - 4px)!important}
+  .omega-hero{min-height:350px!important;padding:30px 26px!important}
+  .omega-hero-copy{max-width:72%!important}
+  .omega-hero-gallery{width:55%!important;right:-16%!important;opacity:.32!important}
+  .omega-identity-strip{grid-template-columns:1fr!important}
+  .omega-identity-strip b,.omega-identity-strip span:last-child{text-align:left!important}
+}
+@media(max-width:700px){
+  #view{width:94vw!important;padding-top:22px!important}
+  .omega-hero{min-height:auto!important;padding:24px 20px 26px!important}
+  .omega-hero-copy{max-width:100%!important}
+  .omega-hero h1{font-size:clamp(39px,11vw,58px)!important;line-height:.92!important}
+  .omega-hero p{font-size:15px!important;line-height:1.55!important;max-width:88%!important}
+  .omega-hero-gallery{width:72%!important;right:-34%!important;opacity:.16!important}
+  .omega-hero-actions{display:grid!important;grid-template-columns:1fr!important;width:min(100%,330px)!important}
+  .omega-hero-actions button{width:100%!important}
+  .omega-identity-strip{display:none!important}
+  .omega-domain{padding:18px!important}
+  .omega-domain>header h2{font-size:30px!important;margin:4px 0 8px!important}
+  .omega-domain>header p{font-size:13px!important;line-height:1.5!important}
+  .omega-art-card{padding:17px 104px 17px 16px!important;min-height:126px!important}
+  .omega-card-art,.omega-feature-card .omega-card-art,.omega-library-card .omega-card-art{width:88px!important;right:8px!important}
+  .home-grid .omega-art-card>span{font-size:20px!important}
+  .home-grid .omega-art-card>em{font-size:11px!important;margin-top:7px!important}
+  .omega-hero .hero-metrics{gap:7px 14px!important;font-size:12px!important}
+}
+@media(max-width:430px){
+  .omega-hero p{max-width:100%!important}
+  .omega-hero-gallery{right:-42%!important;opacity:.12!important}
+  .omega-art-card{padding-right:88px!important}
+  .omega-card-art,.omega-feature-card .omega-card-art,.omega-library-card .omega-card-art{width:74px!important}
+}
