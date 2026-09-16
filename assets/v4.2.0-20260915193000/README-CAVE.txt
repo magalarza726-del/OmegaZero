@@ -1,0 +1,1 @@
+Chess in the Cave build overlay. Core logic: core/caveChess.js; UI: features/chessInCave.js.
