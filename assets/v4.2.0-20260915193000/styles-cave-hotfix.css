@@ -38,7 +38,6 @@
 .cave-sq.cave-glow-right{--cave-gr:rgba(18,92,94,.42)}
 .cave-sq.cave-glow-bottom{--cave-gb:rgba(18,92,94,.42)}
 .cave-sq.cave-glow-left{--cave-gl:rgba(18,92,94,.42)}
-.cave-sq.cave-unseen{pointer-events:none}
 .cave-sq.cave-unseen::after{
   content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
   background:
