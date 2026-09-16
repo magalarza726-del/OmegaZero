@@ -15,7 +15,7 @@ import { playPatch4 } from './features/playPatch4.js';
 import { playPatch5 } from './features/playPatch5.js';
 import { playPatch6 } from './features/playPatch6.js';
 import { amongUsChessMethods } from './features/amongUsChess.js';
-import { chessInCaveMethods } from './features/chessInCave.js';
+import { chessInCaveMethods } from './features/chessInCave.js?v=202609152115';
 import { installChessCaveHomePatch } from './features/chessCaveHomePatch.js';
 import { learnMethods as learnBase } from './features/learnBase.js';
 import { learnPatch1 } from './features/learnPatch1.js';
