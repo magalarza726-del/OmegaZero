@@ -7,7 +7,7 @@ export { OPENINGS, openingOptions, getOpening, identifyOpening, openingTreeHtml,
 export { MASTER_GAMES, MASTER_PROBLEMS } from '../data/masterGames.js';
 export { loadDb, hydrateDb, saveDb, flushDb, addGame, addProblemsFromGame, getMigrationInfo, migrateLegacyData, declineLegacyMigration, clearGamesAndTraining, resetAllAppData } from '../storage.js';
 export { APP_VERSION } from '../version.js';
-export { $, $, clamp, escapeHtml as esc, uciToMove, scoreText, phaseFromFen, downloadText } from '../core/utils.js?v=202610132220';
+export { $, $$, clamp, escapeHtml as esc, uciToMove, scoreText, phaseFromFen, downloadText } from '../core/utils.js?v=202610132220';
 export { classifyMoveQuality, validCandidates } from '../core/moveQuality.js';
 export { fideGameState, timeoutResult, FIDE_RULES_VERSION } from '../core/fideRules.js';
 export { buildGameStats, buildTrainingStats, buildPlayerEloStats, estimateWdl } from '../core/statistics.js';
