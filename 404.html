@@ -27,8 +27,54 @@
     <link rel="stylesheet" href="./assets/v4.2.0-20260915193000/styles-cave-hotfix.css?v=202609152245" />
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="./assets/v4.2.0-20260915193000/main.js?v=202610132128"></script>
+    <div id="app">
+      <div id="omega-boot" style="min-height:100vh;display:grid;place-items:center;background:#07111f;color:#eef5ff;font:16px system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box">
+        <div><b style="font-size:28px;letter-spacing:.08em">OMEGAZERO</b><p style="opacity:.72">Iniciando laboratorio…</p></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        if (!String.prototype.replaceAll) {
+          String.prototype.replaceAll = function (search, replacement) {
+            return this.split(search).join(replacement);
+          };
+        }
+        if (!Object.fromEntries) {
+          Object.fromEntries = function (entries) {
+            var out = {};
+            for (var i = 0; i < entries.length; i += 1) out[entries[i][0]] = entries[i][1];
+            return out;
+          };
+        }
+        if (!Array.prototype.at) {
+          Array.prototype.at = function (index) {
+            index = Number(index) || 0;
+            if (index < 0) index += this.length;
+            return this[index];
+          };
+        }
+        function fail(message) {
+          var root = document.getElementById('app');
+          if (!root || root.dataset.omegaReady === '1' || root.dataset.omegaReady === 'error') return;
+          root.dataset.omegaReady = 'error';
+          root.innerHTML = '<main style="min-height:100vh;background:#07111f;color:#eef5ff;padding:28px;font:16px/1.45 system-ui,sans-serif;box-sizing:border-box"><div style="max-width:620px;margin:12vh auto 0"><h1>OmegaZero</h1><h2 style="font-size:18px">No se pudo completar el inicio</h2><p style="opacity:.82">La interfaz web no llegó a arrancar dentro de Android.</p><pre style="white-space:pre-wrap;background:#02070b;padding:14px;border-radius:10px;overflow:auto">' + String(message || 'Error de carga desconocido').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre></div></main>';
+        }
+        window.addEventListener('error', function (event) {
+          if (event && event.message) fail(event.message + (event.filename ? '\n' + event.filename + ':' + event.lineno : ''));
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason;
+          fail(reason && reason.message ? reason.message : reason);
+        });
+        setTimeout(function () {
+          var root = document.getElementById('app');
+          if (root && root.dataset.omegaReady !== '1' && root.dataset.omegaReady !== 'error') {
+            fail('Tiempo de espera agotado al cargar los módulos. Esto suele indicar una incompatibilidad del Android System WebView o un recurso local que no pudo abrirse.');
+          }
+        }, 8000);
+      }());
+    </script>
+    <script type="module" src="./assets/v4.2.0-20260915193000/main.js?v=202610132205"></script>
     <script type="module" src="./assets/v4.2.0-20260915193000/visual-runtime.js"></script>
   </body>
 </html>
