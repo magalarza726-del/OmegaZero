@@ -1,4 +1,4 @@
-import { Chess, chooseBotCandidate, resolveBotScheme, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js?v=202610132128';
+import { Chess, chooseBotCandidate, resolveBotScheme, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js?v=202610132205';
 import { THEMES } from '../app/config.js';
 export const playMethods = {
  renderSetup(){
