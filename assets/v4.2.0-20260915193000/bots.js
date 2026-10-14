@@ -57,7 +57,9 @@ export function hippoIntentScore(chess, color) {
 }
 
 export function detectsHippo(chess, color) {
-  return hippoIntentScore(chess, color) >= 3;
+  // Un simple fianchetto g6/Bg7 (o g3/Bg2) aparece en Pirc, Moderna e India de Rey.
+  // Exigimos más señales de la "concha" para no disparar Counter Hipopótamo por error.
+  return hippoIntentScore(chess, color) >= 6;
 }
 
 export function resolveBotScheme(botId, color, configuredScheme = 'auto', leagueGames = 0, chess = null) {
