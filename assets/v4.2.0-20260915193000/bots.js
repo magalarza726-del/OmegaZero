@@ -27,8 +27,8 @@ export const BOTS = {
     accent: '#d46f67',
     glyph: 'Ω',
     repertoire: ['counterHippo'],
-    description: 'Especialista antihipopótamo alimentado por las mismas trece familias estructurales. Elige entre centro de rey, Austríaco, centro de dama y cuatro peones, restringe las seis rupturas de Zero y abre la posición en el momento en que el desarrollo lo permite.',
-    doctrine: 'Counter permanente: convertir el espacio en control real, vigilar f5/c5/g5/b5, usar h4/a4 como restricciones concretas y castigar el rey o las piezas cuando el Hipopótamo se desvía hacia un semi-Hippo impreciso.',
+    description: 'Modo hiperagresivo y táctico. Juega la mejor línea de Stockfish mientras no detecta un Hipopótamo rival; cuando aparecen señales suficientes, activa Counter Hipopótamo con centros amplios, Ataque Austríaco/cuatro peones, restricciones h4/a4 y rupturas directas.',
+    doctrine: 'Counter condicional: no fuerza una receta anti-Hipopótamo contra cualquier rival. Primero detecta la estructura enemiga; si no hay Hipopótamo, mantiene la primera línea del motor. Si lo detecta, convierte espacio, iniciativa y actividad en presión concreta sobre f5/c5/g5/b5 y el rey.',
     knowledgeSource: 'The Hippopotamus Defence · Alessio De Santis · New In Chess 2019',
   },
 };
@@ -61,12 +61,13 @@ export function detectsHippo(chess, color) {
 }
 
 export function resolveBotScheme(botId, color, configuredScheme = 'auto', leagueGames = 0, chess = null) {
-  void color;
   void configuredScheme;
   void leagueGames;
-  void chess;
-  if (botId === 'omega') return 'counterHippo';
   if (botId === 'zero') return 'hippo';
+  if (botId === 'omega') {
+    const enemy = color === 'b' ? 'w' : 'b';
+    return chess && detectsHippo(chess, enemy) ? 'counterHippo' : 'best';
+  }
   return 'best';
 }
 
@@ -82,7 +83,7 @@ export function botPlan(botId, color, configuredScheme = 'auto', leagueGames = 0
     return 'Zero clasifica el centro antes de mover: completa el Hipopótamo solo cuando es adecuado, o entra en un semi-Hippo con la ruptura exacta. Conserva la elasticidad, elige conscientemente la seguridad del rey y explota el defecto creado por el último avance rival.';
   }
   if (schemeId === 'counterHippo') {
-    return 'Omega juega Counter Hipopótamo de forma permanente: selecciona el tipo de centro, respalda cada peón con desarrollo, restringe f5/c5/g5/b5 y provoca una transformación concreta antes de que Zero coordine sus piezas.';
+    return 'Omega detectó un Hipopótamo rival y activa Counter: ocupa el centro, respalda cada peón con desarrollo, restringe f5/c5/g5/b5 y busca una transformación concreta antes de que el rival coordine sus piezas.';
   }
   return 'Omega no detecta el patrón que activa Counter: descarta sesgos temáticos y ejecuta la mejor jugada de Stockfish.';
 }
@@ -93,7 +94,7 @@ export function botSelectOptions(selected) {
 
 export function botSchemeOptions(botId, selected = 'auto') {
   if (botId === 'omega') {
-    return '<option value="auto" selected>Automático · Counter Hipopótamo</option>';
+    return '<option value="auto" selected>Automático · mejor línea / Counter si detecta Hipopótamo</option>';
   }
   return ZERO_SCHEMES.map((id) => {
     const label = id === 'auto' ? 'Automático · Defensa Hipopótamo' : SCHEMES[id].name;
