@@ -335,6 +335,11 @@ export function chooseBotCandidate(chess, candidates, botId, schemeId, color, le
   const direction = color === 'b' ? 1 : -1;
   const sorted = [...candidates].sort((a, b) => direction * (a.score - b.score));
   const best = sorted[0];
+  // Omega solo activa su sesgo Counter cuando resolveBotScheme detecta Hipopótamo.
+  // Fuera de ese patrón, "best" significa literalmente la primera línea del motor.
+  if (botId === 'omega' && schemeId === 'best') {
+    return { ...best, plan: 'mejor línea de Stockfish', learnedBonus: 0, composite: 0 };
+  }
   const loss = (candidate) => color === 'b' ? candidate.score - best.score : best.score - candidate.score;
   const activeStyleId = styleId || (botId === 'zero' ? 'zero' : 'omega');
   const activeStyle = STYLES[activeStyleId] || STYLES.zero;
