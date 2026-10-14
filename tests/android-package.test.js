@@ -11,6 +11,8 @@ const appGradle=readFileSync(resolve(android,'app/build.gradle'),'utf8');
 const workflow=readFileSync(resolve(root,'.github/workflows/android-apk.yml'),'utf8');
 const version=JSON.parse(readFileSync(resolve(root,'version.json'),'utf8'));
 const utils=readFileSync(resolve(root,version.assetRoot,'core/utils.js'),'utf8');
+const main=readFileSync(resolve(root,version.assetRoot,'main.js'),'utf8');
+const index=readFileSync(resolve(root,'index.html'),'utf8');
 
 test('el APK está diseñado para ejecutar OmegaZero sin permiso de Internet',()=>{
   assert.equal(existsSync(android),true);
@@ -33,6 +35,17 @@ test('las exportaciones web tienen un puente nativo Android',()=>{
   assert.match(activity,/ACTION_CREATE_DOCUMENT/);
   assert.match(utils,/OmegaZeroAndroid/);
   assert.match(utils,/bridge\.saveText/);
+});
+
+test('el arranque Android evita APIs que dejaban WebViews antiguos en blanco',()=>{
+  assert.doesNotMatch(main,/\nawait prepareBuild\(\)/);
+  assert.match(main,/prepareBuild\(\)\.then\(startOmegaZero/);
+  assert.doesNotMatch(utils,/\.replaceAll\(/);
+  assert.match(index,/id="omega-boot"/);
+  assert.match(index,/String\.prototype\.replaceAll/);
+  assert.match(index,/Tiempo de espera agotado al cargar los módulos/);
+  assert.match(activity,/LOAD_NO_CACHE/);
+  assert.match(activity,/onConsoleMessage/);
 });
 
 test('GitHub Actions compila y publica el APK como artefacto',()=>{

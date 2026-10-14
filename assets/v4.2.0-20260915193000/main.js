@@ -1,4 +1,4 @@
-import { Chess, StockfishEngine, loadDb, hydrateDb, getMigrationInfo, applyAccessibility } from './app/deps.js?v=202610132128';
+import { Chess, StockfishEngine, loadDb, hydrateDb, getMigrationInfo, applyAccessibility } from './app/deps.js?v=202610132205';
 import { appChromeMethods as appChromeBase } from './features/appChromeBase.js';
 import { appChromePatch } from './features/appChromePatch.js';
 import { pawnGalleryMethods } from './features/pawnGallery.js';
@@ -7,11 +7,11 @@ import { structureStudyPatch } from './features/structureStudyPatch.js';
 import { freeStructureStudyMethods } from './features/freeStructureStudy.js';
 import { energyAnalysisMethods } from './features/energyAnalysis.js';
 import { boardMethods } from './features/board.js';
-import { playMethods as playBase } from './features/playBase.js?v=202610132128';
+import { playMethods as playBase } from './features/playBase.js?v=202610132205';
 import { playPatch1 } from './features/playPatch1.js';
 import { playPatch2 } from './features/playPatch2.js';
 import { playPatch3 } from './features/playPatch3.js';
-import { playPatch4 } from './features/playPatch4.js?v=202610132128';
+import { playPatch4 } from './features/playPatch4.js?v=202610132205';
 import { playPatch5 } from './features/playPatch5.js';
 import { playPatch6 } from './features/playPatch6.js';
 import { amongUsChessMethods } from './features/amongUsChess.js';
@@ -38,4 +38,20 @@ class App{
 Object.assign(App.prototype,appChromeBase,appChromePatch,boardMethods,playBase,playPatch1,playPatch2,playPatch3,playPatch4,playPatch5,playPatch6,amongUsChessMethods,chessInCaveMethods,chessInCaveMovePatch,chessInCaveSetupPatch,learnBase,learnPatch1,learnPatch2,learnPatch3,libraryMethods,pawnGalleryMethods,structureStudyBase,structureStudyPatch,freeStructureStudyMethods,energyAnalysisMethods,tcomBase,tcomPatch,transformMethods,modelLabMethods);
 installStabilityPatch(App);installVisibilityPatch(App);installChessCaveHomePatch(App);
 async function prepareBuild(){try{const response=await fetch(`./version.json?t=${Date.now()}`,{cache:'no-store'});if(!response.ok)return;const meta=await response.json();const key='omegazero:runtime:build';const previous=localStorage.getItem(key);if(previous&&previous!==meta.buildId){if('caches' in window){for(const name of await caches.keys())await caches.delete(name)}if('serviceWorker' in navigator){for(const registration of await navigator.serviceWorker.getRegistrations())await registration.unregister()}}localStorage.setItem(key,meta.buildId)}catch{}}
-await prepareBuild();new App(document.getElementById('app'));
+function renderFatalStartup(error){
+ const root=document.getElementById('app');
+ const detail=String(error?.message||error||'Error desconocido');
+ console.error('OmegaZero no pudo iniciar',error);
+ if(!root)return;
+ root.dataset.omegaReady='error';
+ root.innerHTML=`<main style="min-height:100vh;background:#07111f;color:#eef5ff;padding:28px;font:16px/1.45 system-ui,sans-serif;box-sizing:border-box"><div style="max-width:620px;margin:12vh auto 0"><h1 style="margin:0 0 12px">OmegaZero</h1><h2 style="font-size:18px">No se pudo iniciar la interfaz</h2><p style="opacity:.82">El contenedor Android sí abrió, pero el motor web encontró un error al arrancar.</p><pre style="white-space:pre-wrap;background:#02070b;padding:14px;border-radius:10px;overflow:auto">${detail.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre><p style="opacity:.7;font-size:13px">Reinicia la app. Si vuelve a aparecer, esta pantalla ya nos mostrará el error exacto.</p></div></main>`;
+}
+function startOmegaZero(){
+ try{
+  const root=document.getElementById('app');
+  if(!root)throw new Error('No existe el contenedor #app');
+  new App(root);
+  root.dataset.omegaReady='1';
+ }catch(error){renderFatalStartup(error)}
+}
+prepareBuild().then(startOmegaZero,()=>startOmegaZero());
