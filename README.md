@@ -5,3 +5,7 @@ OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investiga
 ## v4.2.0
 
 Incluye **Chess in the Cave**, una variante local J1 vs J2 con visión parcial por alcance de las piezas, captura directa del rey, historial oculto durante la partida y modificador difícil **Niebla**.
+
+## Android offline
+
+La app Android empaqueta el build web activo y Stockfish dentro del APK, sin permiso de Internet. Consulta [ANDROID_OFFLINE.md](./ANDROID_OFFLINE.md). GitHub Actions genera el artefacto `OmegaZero-offline-debug.apk`.
