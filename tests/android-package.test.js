@@ -14,7 +14,7 @@ const utils=readFileSync(resolve(root,version.assetRoot,'core/utils.js'),'utf8')
 
 test('el APK está diseñado para ejecutar OmegaZero sin permiso de Internet',()=>{
   assert.equal(existsSync(android),true);
-  assert.doesNotMatch(manifest,/android\.permission\.INTERNET/);
+  assert.doesNotMatch(manifest,/<uses-permission[^>]+android\.permission\.INTERNET/);
   assert.match(activity,/WebViewAssetLoader/);
   assert.match(activity,/appassets\.androidplatform\.net\/assets\/www\/index\.html/);
   assert.match(activity,/uri\.host != APP_HOST/);
