@@ -23,7 +23,7 @@ export const playPatch4={
   if(getOpening(openingId)&&bookSan){const legal=chess.moves({verbose:true}).find(move=>move.san.replace(/[+#]/g,'')===bookSan.replace(/[+#]/g,''));if(legal)chosen={uci:legal.from+legal.to+(legal.promotion||''),book:true}}
   const before=chess.fen();let candidates=[];
   if(!chosen||multiPv>1)candidates=await this.engine.analyse(before,{depth,multiPv:Math.max(3,multiPv),skill});
-  if(!chosen){chosen=chooseBotCandidate(chess,candidates,style,resolveBotScheme(style,color),color,{},style)||candidates[0];chosen=this.applyDiversity(chosen,candidates,color)}
+  if(!chosen){chosen=chooseBotCandidate(chess,candidates,style,resolveBotScheme(style,color,'auto',0,chess),color,{},style)||candidates[0];chosen=this.applyDiversity(chosen,candidates,color)}
   return {chosen,candidates,quality:null};
  },
  async runSimReply(index){
