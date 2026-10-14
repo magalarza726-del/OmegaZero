@@ -5,7 +5,9 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
+import android.util.Log
 import android.os.Bundle
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -62,7 +64,7 @@ class MainActivity : Activity() {
             domStorageEnabled = true
             databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            cacheMode = WebSettings.LOAD_DEFAULT
+            cacheMode = WebSettings.LOAD_NO_CACHE
             allowFileAccess = false
             allowContentAccess = false
             javaScriptCanOpenWindowsAutomatically = false
@@ -74,8 +76,18 @@ class MainActivity : Activity() {
             setGeolocationEnabled(false)
         }
 
+        webView.clearCache(true)
         webView.addJavascriptInterface(AndroidBridge(), "OmegaZeroAndroid")
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                val message = consoleMessage ?: return false
+                Log.e(
+                    "OmegaZeroWeb",
+                    "${message.message()} @ ${message.sourceId()}:${message.lineNumber()}"
+                )
+                return true
+            }
+        }
         webView.webViewClient = object : WebViewClientCompat() {
             override fun shouldInterceptRequest(
                 view: WebView,
