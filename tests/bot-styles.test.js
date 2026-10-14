@@ -27,20 +27,26 @@ test('Omega no activa Counter Hipopótamo en una posición normal',()=>{
   assert.equal(chosen.uci,'e2e4');
 });
 
-test('Omega activa Counter únicamente cuando detecta señales reales de Hipopótamo rival',()=>{
+test('Omega activa Counter únicamente cuando detecta una concha Hipopótamo suficiente',()=>{
   const chess=new Chess();
   chess.move('e4');
   chess.move('g6');
   chess.move('d4');
   chess.move('Bg7');
+  chess.move('Nc3');
+  chess.move('d6');
+  chess.move('Nf3');
+  chess.move('e6');
   assert.equal(detectsHippo(chess,'b'),true);
   assert.equal(resolveBotScheme('omega','w','auto',0,chess),'counterHippo');
 });
 
-test('la detección de Hipopótamo no confunde un fianchetto incompleto aislado',()=>{
+test('la detección de Hipopótamo no confunde un fianchetto normal con la variante',()=>{
   const chess=new Chess();
   chess.move('e4');
   chess.move('g6');
+  chess.move('d4');
+  chess.move('Bg7');
   assert.equal(detectsHippo(chess,'b'),false);
   assert.equal(resolveBotScheme('omega','w','auto',0,chess),'best');
 });
