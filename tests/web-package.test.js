@@ -14,14 +14,15 @@ const engine=readFileSync(resolve(active,'engine.js'),'utf8');
 const assets=readFileSync(resolve(active,'publicAssets.js'),'utf8');
 const index=readFileSync(resolve(root,'index.html'),'utf8');
 
-test('la distribución actual es exclusivamente web y no contiene Capacitor',()=>{
+test('el núcleo sigue siendo web y Android lo envuelve sin Capacitor',()=>{
   assert.equal(pkg.version,manifest.version);
   assert.equal(pkg.name,'omegazero');
   assert.equal(pkg.dependencies,undefined);
   assert.doesNotMatch(main,/setupNativePlatform|Capacitor/);
-  assert.doesNotMatch(utils,/Capacitor|Android WebView/);
+  assert.doesNotMatch(utils,/Capacitor/);
   assert.equal(existsSync(resolve(root,'capacitor.config.json')),false);
   assert.equal(existsSync(resolve(root,'android')),false);
+  assert.equal(existsSync(resolve(root,'android-app')),true);
 });
 
 test('CI ejecuta la suite y la raíz está preparada para GitHub Pages',()=>{

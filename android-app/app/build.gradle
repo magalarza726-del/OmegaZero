@@ -1,0 +1,101 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def repositoryRoot = rootProject.projectDir.parentFile
+def versionMetaFile = new File(repositoryRoot, 'version.json')
+if (!versionMetaFile.exists()) {
+    throw new GradleException("No se encontró version.json en la raíz de OmegaZero")
+}
+def versionMeta = new JsonSlurper().parse(versionMetaFile)
+def activeAssetRoot = versionMeta.assetRoot as String
+def activeAssetDir = new File(repositoryRoot, activeAssetRoot)
+def generatedAssetsDir = layout.buildDirectory.dir('generated/offlineWebAssets').get().asFile
+
+if (!activeAssetDir.exists()) {
+    throw new GradleException("El build web activo no existe: ${activeAssetRoot}")
+}
+
+android {
+    namespace 'com.maverick.omegazero'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.maverick.omegazero'
+        minSdk 26
+        targetSdk 35
+        versionCode 4201
+        versionName '4.2.0-offline'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    sourceSets {
+        main {
+            assets.srcDirs = [generatedAssetsDir]
+        }
+    }
+
+    androidResources {
+        noCompress += ['wasm']
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+tasks.register('prepareOfflineWeb') {
+    inputs.file(new File(repositoryRoot, 'index.html'))
+    inputs.file(versionMetaFile)
+    inputs.dir(activeAssetDir)
+    inputs.dir(new File(repositoryRoot, 'public'))
+    outputs.dir(generatedAssetsDir)
+
+    doLast {
+        delete(generatedAssetsDir)
+        def www = new File(generatedAssetsDir, 'www')
+        www.mkdirs()
+
+        copy {
+            from(repositoryRoot)
+            include 'index.html', '404.html', 'version.json'
+            into www
+        }
+        copy {
+            from activeAssetDir
+            into new File(www, activeAssetRoot)
+        }
+        copy {
+            from new File(repositoryRoot, 'public')
+            into new File(www, 'public')
+        }
+
+        def stockfishJs = new File(www, 'public/engine/stockfish-18-lite-single.js')
+        def stockfishWasm = new File(www, 'public/engine/stockfish-18-lite-single.wasm')
+        if (!stockfishJs.exists() || !stockfishWasm.exists()) {
+            throw new GradleException('Stockfish local no quedó incluido en el APK')
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('prepareOfflineWeb')
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

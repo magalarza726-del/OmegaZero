@@ -1,4 +1,4 @@
-import { Chess, chooseBotCandidate, resolveBotScheme, chooseTransformMoveOnePly, chooseEnergyMoveOnePly, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js';
+import { Chess, chooseBotCandidate, resolveBotScheme, chooseTransformMoveOnePly, chooseEnergyMoveOnePly, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js?v=202610132112';
 import { THEMES } from '../app/config.js';
 export const playPatch4={
  enqueueSimReply(index){const s=this.simultaneous?.games[index];if(!s||s.thinking||s.result||fideGameState(s.chess,s.positions).terminal)return;s.thinking=true;if(index===this.simultaneous.active){this.thinking=true;this.renderGame()}this.simEngineQueue=this.simEngineQueue.catch(()=>{}).then(()=>this.runSimReply(index))},
@@ -23,7 +23,7 @@ export const playPatch4={
   if(getOpening(openingId)&&bookSan){const legal=chess.moves({verbose:true}).find(move=>move.san.replace(/[+#]/g,'')===bookSan.replace(/[+#]/g,''));if(legal)chosen={uci:legal.from+legal.to+(legal.promotion||''),book:true}}
   const before=chess.fen();let candidates=[];
   if(!chosen||multiPv>1)candidates=await this.engine.analyse(before,{depth,multiPv:Math.max(3,multiPv),skill});
-  if(!chosen){chosen=chooseBotCandidate(chess,candidates,style,resolveBotScheme(style,color),color,{},style)||candidates[0];chosen=this.applyDiversity(chosen,candidates,color)}
+  if(!chosen){chosen=chooseBotCandidate(chess,candidates,style,resolveBotScheme(style,color,'auto',0,chess),color,{},style)||candidates[0];chosen=this.applyDiversity(chosen,candidates,color)}
   return {chosen,candidates,quality:null};
  },
  async runSimReply(index){

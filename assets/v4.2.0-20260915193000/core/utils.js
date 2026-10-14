@@ -61,6 +61,15 @@ export function debounce(fn, delay = 150) {
 }
 
 export function downloadText(filename, text, mime = 'text/plain;charset=utf-8') {
+  const bridge = globalThis.OmegaZeroAndroid;
+  if (bridge && typeof bridge.saveText === 'function') {
+    try {
+      bridge.saveText(String(filename), String(text), String(mime));
+      return;
+    } catch {
+      // Si el puente nativo no está disponible, conserva la descarga web normal.
+    }
+  }
   const blob = new Blob([text], { type: mime });
   fallbackDownload(blob, filename);
 }
