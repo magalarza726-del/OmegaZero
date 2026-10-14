@@ -1,4 +1,4 @@
-import { Chess, StockfishEngine, loadDb, hydrateDb, getMigrationInfo, applyAccessibility } from './app/deps.js?v=202610132205';
+import { Chess, StockfishEngine, loadDb, hydrateDb, getMigrationInfo, applyAccessibility } from './app/deps.js?v=202610132220';
 import { appChromeMethods as appChromeBase } from './features/appChromeBase.js';
 import { appChromePatch } from './features/appChromePatch.js';
 import { pawnGalleryMethods } from './features/pawnGallery.js';
