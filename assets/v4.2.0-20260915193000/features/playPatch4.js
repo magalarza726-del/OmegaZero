@@ -1,4 +1,4 @@
-import { Chess, chooseBotCandidate, resolveBotScheme, chooseTransformMoveOnePly, chooseEnergyMoveOnePly, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js';
+import { Chess, chooseBotCandidate, resolveBotScheme, chooseTransformMoveOnePly, chooseEnergyMoveOnePly, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js?v=202610132112';
 import { THEMES } from '../app/config.js';
 export const playPatch4={
  enqueueSimReply(index){const s=this.simultaneous?.games[index];if(!s||s.thinking||s.result||fideGameState(s.chess,s.positions).terminal)return;s.thinking=true;if(index===this.simultaneous.active){this.thinking=true;this.renderGame()}this.simEngineQueue=this.simEngineQueue.catch(()=>{}).then(()=>this.runSimReply(index))},
