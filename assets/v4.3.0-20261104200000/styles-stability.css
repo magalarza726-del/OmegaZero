@@ -1,0 +1,6 @@
+/* v4.0.1 stability additions */
+.tcom-invalid-candidates{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
+.tcom-invalid-candidates summary{cursor:pointer;font-size:11px}
+.tcom-invalid-candidates>div{display:grid;gap:4px;margin-top:7px}
+.tcom-invalid-candidates span{display:grid;grid-template-columns:auto 1fr;gap:8px;padding:6px 8px;border-radius:6px}
+.tcom-invalid-candidates small{overflow-wrap:anywhere}
