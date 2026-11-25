@@ -2,6 +2,12 @@
 
 OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investigar ajedrez con Stockfish y modelos experimentales.
 
+## v4.3.2
+
+- Inicio compacto y responsive: Jugar, Aprender e Investigar, sin cabecera promocional ni franja decorativa.
+- El lector del Manual del Gran Maestro se retira de la interfaz. En las partidas se pueden abrir la Matriz del Gran Maestro (20 habilidades, 100 casillas) y la Matriz Apéndice (9 casillas en 3 fases), con progreso local persistente.
+- Consultar las matrices no modifica la posición ni pausa los relojes o los motores.
+
 ## v4.3.1
 
 - Jugar: J1 vs J2, J1 vs COM y COM vs COM; cada modo permite elegir Ajedrez clásico, King of the Hill, Three-Check, Racing Kings, Antichess o In the night.
