@@ -2,6 +2,12 @@
 
 OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investigar ajedrez con Stockfish y modelos experimentales.
 
+## v4.3.3
+
+- Identidad visual cálida: esmeralda, ámbar, coral y ciruela; iconos SVG locales, degradados, menú lateral en escritorio y navegación horizontal en móvil.
+- Inicio conserva las tres modalidades, las dos herramientas de aprendizaje y los tres laboratorios de investigación. Las matrices continúan disponibles durante las partidas.
+- La paleta de las piezas y casillas sigue siendo configurable por separado. El menú lateral se limita al inicio para preservar el espacio del tablero.
+
 ## v4.3.2
 
 - Inicio compacto y responsive: Jugar, Aprender e Investigar, sin cabecera promocional ni franja decorativa.
