@@ -1,10 +1,12 @@
-import { Chess } from '../app/deps.js';
+import { Chess } from '../vendor/chess.js';
+import { initialCaveState, cloneCaveState, caveLegalMoves } from '../core/caveChess.js';
 
 export const VARIANTS = Object.freeze([
   {id:'standard',name:'Ajedrez clásico',description:'Reglas FIDE · Stockfish, S-COM, T-COM y E-COM.'},
   {id:'hill',name:'King of the Hill',description:'Jaque mate o lleva tu rey a d4, e4, d5 o e5.'},
   {id:'threecheck',name:'Three-Check',description:'Jaque mate o da tres jaques en total.'},
   {id:'racing',name:'Racing Kings',description:'Lleva tu rey a la octava fila sin dar ni recibir jaque.'},
+  {id:'antichess',name:'Antichess',description:'Las capturas son obligatorias. Gana quien se queda sin piezas o sin movimientos legales.'},
   {id:'night',name:'In the night',description:'Visión parcial, rey capturable y modificador Niebla.'}
 ]);
 const modes={pvp:'J1 vs J2',pvc:'J1 vs COM',cvc:'COM vs COM'};
@@ -12,6 +14,37 @@ const files='abcdefgh',opposite=c=>c==='w'?'b':'w',side=c=>c==='w'?'Blancas':'Ne
 const center=new Set(['d4','e4','d5','e5']);
 const values={p:1,n:3,b:3.2,r:5,q:9,k:0};
 const racingFen='8/8/8/8/8/8/krbnNBRK/qrbnNBRQ w - - 0 1';
+// Antichess has no royal king and no castling. Reuse only geometric move generation.
+export class AntiBoard{
+  constructor(state=initialCaveState(),halfmoves=0){this.state=state;this.halfmoves=halfmoves}
+  clone(){return new AntiBoard(cloneCaveState(this.state),this.halfmoves)}
+  turn(){return this.state.turn}
+  get(sq){return this.state.board[sq]}
+  board(){return Array.from({length:8},(_,r)=>[...files].map(f=>{const square=f+(8-r),p=this.get(square);return p?{...p,square}:null}))}
+  fen(){return this.board().map(row=>row.map(p=>p?(p.color==='w'?p.type.toUpperCase():p.type):'1').join('')).join('/')+' '+this.turn()+' - '+(this.state.enPassant?.square||'-')+' '+this.halfmoves+' 1'}
+  isDrawByFiftyMoves(){return this.halfmoves>=100}
+  moves(){
+    const out=[],color=this.turn();
+    for(const [from,p] of Object.entries(this.state.board)){
+      if(p.color!==color)continue;
+      for(const to of caveLegalMoves(this.state,from)){
+        if(p.type==='k'&&Math.abs(files.indexOf(from[0])-files.indexOf(to[0]))>1)continue;
+        const captured=this.get(to)||(p.type==='p'&&this.state.enPassant?.square===to?this.get(this.state.enPassant.pawnSquare):null);
+        const promotions=p.type==='p'&&/[18]$/.test(to)?['q','r','b','n','k']:[undefined];
+        for(const promotion of promotions)out.push({from,to,piece:p.type,color,captured:captured?.type,promotion,san:from+(captured?'x':'-')+to+(promotion?'='+promotion.toUpperCase():'')});
+      }
+    }
+    return out.some(m=>m.captured)?out.filter(m=>m.captured):out;
+  }
+  move(m){
+    const st=this.state,p=st.board[m.from],ep=st.enPassant;
+    if(p.type==='p'&&ep?.square===m.to&&!st.board[m.to])delete st.board[ep.pawnSquare];
+    delete st.board[m.from];st.board[m.to]={...p,type:m.promotion||p.type,moved:true};
+    st.enPassant=p.type==='p'&&Math.abs(Number(m.to[1])-Number(m.from[1]))===2?{square:m.from[0]+((Number(m.to[1])+Number(m.from[1]))/2),pawnSquare:m.to,capturableBy:opposite(p.color)}:null;
+    st.turn=opposite(p.color);this.halfmoves=p.type==='p'||m.captured?0:this.halfmoves+1;return m;
+  }
+}
+function clonePosition(chess){return chess instanceof AntiBoard?chess.clone():new Chess(chess.fen())}
 function kingSquare(chess,color){return chess.board().flat().find(p=>p?.type==='k'&&p.color===color)?.square||''}
 export function variantMoves(chess,id){
   const moves=chess.moves({verbose:true});
@@ -20,13 +53,14 @@ export function variantMoves(chess,id){
 }
 function key(lab){return lab.chess.fen().split(' ').slice(0,4).join(' ')+(lab.id==='threecheck'?' '+lab.checks.w+':'+lab.checks.b:'')}
 export function newVariant(id,mode,humanColor='w'){
-  const lab={id,mode,humanColor,chess:id==='racing'?new Chess(racingFen):new Chess(),checks:{w:0,b:0},history:[],counts:new Map(),result:null,selected:null,last:null,paused:false,timer:null};
+  const lab={id,mode,humanColor,chess:id==='antichess'?new AntiBoard():id==='racing'?new Chess(racingFen):new Chess(),checks:{w:0,b:0},history:[],counts:new Map(),result:null,selected:null,last:null,paused:false,timer:null};
   lab.counts.set(key(lab),1);return lab;
 }
 function won(color,reason){return {winner:color,reason}}
 function draw(reason){return {winner:'draw',reason}}
 export function variantResult(lab){
   const {chess,id,checks}=lab,turn=chess.turn();
+  if(id==='antichess'&&!variantMoves(chess,id).length)return won(turn,'Sin piezas o sin movimientos legales');
   if(id==='hill'){for(const c of ['w','b'])if(center.has(kingSquare(chess,c)))return won(c,'Rey en el centro')}
   if(id==='threecheck'){for(const c of ['w','b'])if(checks[c]>=3)return won(c,'Tres jaques')}
   if(id==='racing'){
@@ -35,7 +69,7 @@ export function variantResult(lab){
     if(b)return won('b','Rey en la octava fila');
     if(w&&(turn==='w'||!variantMoves(chess,id).some(m=>m.piece==='k'&&m.to.endsWith('8'))))return won('w','Rey en la octava fila');
     if(!variantMoves(chess,id).length)return draw('Sin jugadas legales');
-  }else{
+  }else if(id!=='antichess'){
     if(chess.isCheckmate())return won(opposite(turn),'Jaque mate');
     if(chess.isStalemate())return draw('Ahogado');
     if(id==='threecheck'&&chess.board().flat().filter(Boolean).every(p=>p.type==='k'))return draw('Solo quedan los reyes');
@@ -57,6 +91,7 @@ export function playVariantMove(lab,move){
 function score(lab,c){
   const r=lab.result;if(r)return r.winner==='draw'?0:r.winner===c?100000:-100000;
   let val=0;for(const p of lab.chess.board().flat().filter(Boolean))val+=(p.color===c?1:-1)*values[p.type]*10;
+  if(lab.id==='antichess')return -val;
   for(const sideColor of ['w','b']){
     const sign=sideColor===c?1:-1,k=kingSquare(lab.chess,sideColor);
     if(lab.id==='hill')val-=sign*5*(Math.abs(files.indexOf(k[0])-3.5)+Math.abs(Number(k[1])-4.5));
@@ -68,13 +103,13 @@ function score(lab,c){
 export function chooseVariantMove(lab){
   const c=lab.chess.turn(),moves=variantMoves(lab.chess,lab.id);let best=null,bestScore=-Infinity;
   for(const m of moves){
-    const sim={...lab,chess:new Chess(lab.chess.fen()),checks:{...lab.checks},history:[],counts:new Map(lab.counts),last:null};
+    const sim={...lab,chess:clonePosition(lab.chess),checks:{...lab.checks},history:[],counts:new Map(lab.counts),last:null};
     if(!playVariantMove(sim,m))continue;
     let s=score(sim,c);
     if(!sim.result){
       let worst=Infinity;
       for(const reply of variantMoves(sim.chess,sim.id)){
-        const next={...sim,chess:new Chess(sim.chess.fen()),checks:{...sim.checks},history:[],counts:new Map(sim.counts)};
+        const next={...sim,chess:clonePosition(sim.chess),checks:{...sim.checks},history:[],counts:new Map(sim.counts)};
         if(playVariantMove(next,reply))worst=Math.min(worst,score(next,c));
       }
       if(Number.isFinite(worst))s=.25*s+.75*worst;
@@ -118,7 +153,7 @@ export const variantPlayMethods={
     v.querySelectorAll('[data-vsquare]').forEach(btn=>btn.onclick=()=>{
       if(!human||lab.result)return;
       const sq=btn.dataset.vsquare,options=moves.filter(m=>m.to===sq);
-      if(options.length){let m=options[0];if(options.some(a=>a.promotion)){const p=(prompt('Promoción: Q, R, B o N','Q')||'Q').toLowerCase();m=options.find(a=>a.promotion===p)||options.find(a=>a.promotion==='q')||m}playVariantMove(lab,m)}
+      if(options.length){let m=options[0];if(options.some(a=>a.promotion)){const p=(prompt(id==='antichess'?'Promoción: Q, R, B, N o K':'Promoción: Q, R, B o N','Q')||'Q').toLowerCase();m=options.find(a=>a.promotion===p)||options.find(a=>a.promotion==='q')||m}playVariantMove(lab,m)}
       else lab.selected=chess.get(sq)?.color===turn?sq:null;
       this.renderVariantGame();
     });
