@@ -2,6 +2,13 @@
 
 OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investigar ajedrez con Stockfish y modelos experimentales.
 
+## v4.4.0
+
+- E-COM multivariable: 20 métricas posicionales, funciones independientes por bando, expresiones matemáticas con sintaxis LaTeX compatible y vista MathML local, constantes, funciones auxiliares y expresiones por tramos.
+- Laboratorio FEN: tabla de todas las candidatas legales, puntuación y veinte variables; una sola semijugada, sin ejecutar respuestas rivales ni consultar Stockfish.
+- La función por defecto es equilibrada; seis plantillas incluidas. El modo energético U/K/E se conserva como opción por bando. Las expresiones inválidas no producen jugadas aleatorias.
+- Movilidad y amenazas son geométricas, no predicciones tácticas; x9 representa material propio atacado y sin defensa. El editor es local, inspirado en Desmos, no la interfaz oficial de Desmos.
+
 ## v4.3.3
 
 - Identidad visual cálida: esmeralda, ámbar, coral y ciruela; iconos SVG locales, degradados, menú lateral en escritorio y navegación horizontal en móvil.
