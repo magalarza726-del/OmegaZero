@@ -1,10 +1,22 @@
 import { Chess, chooseBotCandidate, resolveBotScheme, chooseTransformMoveOnePly, chooseEnergyMoveOnePly, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js?v=202610132205';
+import { chooseMultivariateMoveOnePly } from '../core/multivariateChess.js';
+import { compileEcomFormula } from '../core/ecomExpressions.js';
+import { ecomSideConfig } from './ecomFunctionLab.js';
 import { THEMES } from '../app/config.js';
 export const playPatch4={
  enqueueSimReply(index){const s=this.simultaneous?.games[index];if(!s||s.thinking||s.result||fideGameState(s.chess,s.positions).terminal)return;s.thinking=true;if(index===this.simultaneous.active){this.thinking=true;this.renderGame()}this.simEngineQueue=this.simEngineQueue.catch(()=>{}).then(()=>this.runSimReply(index))},
  async chooseComBrainDecision(chess,{brain='s',color=chess.turn(),style='zero',skill=this.cfg.skill,depth=this.cfg.depth,multiPv=this.cfg.multiPv,openingId='auto',diversity=this.cfg.diversity}={}){
   brain=this.normalizeBrain(brain);
   if(brain==='e'){
+   const side=ecomSideConfig(this.energyConfig(),color);
+   if(side.mode==='function'){
+    try{
+     const decision=chooseMultivariateMoveOnePly(chess,compileEcomFormula(side.formula).evaluate),best=decision.best;
+     const pack=item=>({uci:item.from+item.to+item.promotion,score:item.mate?1000000:item.objective,san:item.san,variables:item.variables});
+     if(!best)return {chosen:null,candidates:[],quality:{key:'experimental',label:'E-COM · función indefinida',detail:'Ninguna candidata produce un valor finito. Revisa el dominio en Modelos COM.'}};
+     return {chosen:pack(best),candidates:decision.candidates.filter(c=>c.mate||c.objective!==null).map(pack),quality:{key:'experimental',label:'E-COM · '+side.name,detail:best.san+' · '+(best.mate?'Mate inmediato':best.draw?'Tablas':('f = '+Number(best.objective).toPrecision(6)))+' · una semijugada'}};
+    }catch(error){return {chosen:null,candidates:[],quality:{key:'experimental',label:'E-COM · error de función',detail:String(error.message||error)}}}
+   }
    const cfg=this.energyConfig(),priority=color==='w'?cfg.priorityW:cfg.priorityB,decision=chooseEnergyMoveOnePly(chess,{g:cfg.g,massMode:cfg.massMode,kingWeight:cfg.kingWeight},priority),best=decision.best;
    if(!best)return {chosen:null,candidates:[],quality:null};
    return {chosen:{uci:`${best.from}${best.to}${best.promotion||''}`,score:best.objective,san:best.san},candidates:decision.candidates.map(item=>({uci:`${item.from}${item.to}${item.promotion||''}`,score:item.objective,san:item.san})),quality:{key:'experimental',label:`E-COM · ${priority}`,detail:`${best.san} maximiza ${priority}=${Number(best.objective).toFixed(3)} mirando una sola semijugada.`}};
@@ -30,7 +42,7 @@ export const playPatch4={
   const s=this.simultaneous?.games[index];if(!s)return;const color=s.chess.turn(),brain=this.normalizeBrain(s.config.brain),before=s.chess.fen();
   try{
    const decision=await this.chooseComBrainDecision(s.chess,{brain,color,style:s.config.style,skill:s.config.skill,depth:s.config.depth,multiPv:s.config.multiPv,openingId:s.config.opening,diversity:this.cfg.diversity});
-   if(s.chess.fen()!==before||!decision?.chosen?.uci)return;
+   if(s.chess.fen()!==before)return;if(!decision?.chosen?.uci){s.lastMoveQuality=decision?.quality||null;return;}
    const m=s.chess.move(uciToMove(decision.chosen.uci));
    if(m){s.lastMove=[m.from,m.to];s.positions.push({fen:s.chess.fen(),ply:s.chess.history().length});if(this.cfg.clock){s.clock[m.color]+=this.cfg.increment;s.clock.last=performance.now()}s.lastMoveQuality=decision.quality||this.classifyEngineChoice(decision.chosen,decision.candidates,m);const fide=fideGameState(s.chess,s.positions);if(fide.terminal){s.result=fide.reason;this.finishSimSession(s,fide.reason)}}
   }catch(error){console.warn('COM simultáneo no pudo responder',error)}finally{s.thinking=false;if(this.simultaneous&&index===this.simultaneous.active)this.activateSimBoard(index,true,true)}
