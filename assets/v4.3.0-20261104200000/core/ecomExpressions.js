@@ -34,7 +34,7 @@ function tokenize(s){
   const id=/^[A-Za-z][A-Za-z0-9_]*/.exec(s.slice(i));
   if(id){ // permit Desmos-style ax1 and x1x2, but preserve named helper functions.
    const name=id[0];
-   const split=/^[a-z]?x\d+(?:x\d+)*$/.test(name)?name.match(/x\d+|[a-z]/g):null;
+   const split=/^(?:[a-z]?x\d+)+(?:[a-z])?$/.test(name)?name.match(/x\d+|[a-z]/g):null;
    for(const v of split||[name])tokens.push({type:'id',value:v});i+=name.length;continue;
   }
   const op=/^(?:<=|>=|!=|==|[+\-*/^(),<>=])/.exec(s.slice(i));if(!op)throw Error('Símbolo no compatible: '+s[i]);tokens.push({type:op[0],value:op[0]});i+=op[0].length;
