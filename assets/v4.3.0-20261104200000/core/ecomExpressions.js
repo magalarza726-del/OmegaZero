@@ -3,7 +3,7 @@ export const DEFAULT_ECOM_FORMULA='f=0.2x_{1}+0.3x_{2}+x_{3}+0.4x_{6}+0.8x_{7}+0
 const builtins={abs:Math.abs,sqrt:Math.sqrt,sin:Math.sin,cos:Math.cos,tan:Math.tan,asin:Math.asin,acos:Math.acos,atan:Math.atan,ln:Math.log,log:Math.log10,exp:Math.exp,min:Math.min,max:Math.max,floor:Math.floor,ceil:Math.ceil,round:Math.round,sign:Math.sign,pow:Math.pow};
 const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function latexToText(source){
- let s=String(source).replace(/\\(?:left|right)/g,'').replace(/\\(?:cdot|times)/g,'*').replace(/\\div/g,'/').replace(/\\(?:leq|le)/g,'<=').replace(/\\(?:geq|ge)/g,'>=').replace(/\\neq/g,'!=').replace(/\\pi/g,'pi').replace(/\\(?:quad|qquad|,|;|!)/g,' ').replace(/\\(sin|cos|tan|arcsin|arccos|arctan|ln|log|exp|min|max|abs|floor|ceil)\b/g,(_,n)=>n.replace('arc','a')).replace(/\\operatorname\{([A-Za-z]+)\}/g,'$1').replace(/([A-Za-z])_\{([A-Za-z0-9]+)\}/g,'$1$2').replace(/([A-Za-z])_([0-9]+)/g,'$1$2').replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/').replace(/≤/g,'<=').replace(/≥/g,'>=').replace(/≠/g,'!=').replace(/π/g,'pi');
+ let s=String(source).replace(/\\(?:left|right)/g,'').replace(/\\([{}])/g,'$1').replace(/\\(?:cdot|times)/g,'*').replace(/\\div/g,'/').replace(/\\(?:leq|le)/g,'<=').replace(/\\(?:geq|ge)/g,'>=').replace(/\\neq/g,'!=').replace(/\\pi/g,'pi').replace(/\\(?:quad|qquad|,|;|!)/g,' ').replace(/\\(sin|cos|tan|arcsin|arccos|arctan|ln|log|exp|min|max|abs|floor|ceil)\b/g,(_,n)=>n.replace('arc','a')).replace(/\\operatorname\{([A-Za-z]+)\}/g,'$1').replace(/([A-Za-z])_\{([A-Za-z0-9]+)\}/g,'$1$2').replace(/([A-Za-z])_([0-9]+)/g,'$1$2').replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/').replace(/≤/g,'<=').replace(/≥/g,'>=').replace(/≠/g,'!=').replace(/π/g,'pi');
  function group(i){while(/\s/.test(s[i]||'')&&i<s.length)i++;if(s[i]!=='{')throw Error('Se esperaba un grupo entre llaves');let depth=1,j=i+1;while(j<s.length&&depth){if(s[j]==='{')depth++;else if(s[j]==='}')depth--;j++}if(depth)throw Error('Falta cerrar una llave');return [s.slice(i+1,j-1),j]}
  for(let limit=0;limit<100;limit++){
   const m=/\\(?:frac|dfrac|tfrac|sqrt)\b/.exec(s);if(!m)break;
@@ -27,13 +27,13 @@ function latexToText(source){
  return s;
 }
 function tokenize(s){
- const tokens=[];let i=0;
+ const tokens=[];let i=0;if(s.length>4000)throw Error('Línea demasiado larga');
  while(i<s.length){if(/\s/.test(s[i])){i++;continue}
   const m=/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(s.slice(i));
   if(m){tokens.push({type:'num',value:Number(m[0])});i+=m[0].length;continue}
   const id=/^[A-Za-z][A-Za-z0-9_]*/.exec(s.slice(i));
   if(id){ // permit Desmos-style ax1 and x1x2, but preserve named helper functions.
-   const name=id[0],parts=name.match(/[A-Za-z_]+[0-9]*/g)||[name];
+   const name=id[0];
    const split=/^[a-z]?x\d+(?:x\d+)*$/.test(name)?name.match(/x\d+|[a-z]/g):null;
    for(const v of split||[name])tokens.push({type:'id',value:v});i+=name.length;continue;
   }
