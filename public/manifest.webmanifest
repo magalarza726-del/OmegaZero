@@ -4,8 +4,8 @@
   "description": "Chess Laboratory para jugar, aprender e investigar con Stockfish y modelos experimentales.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#07111f",
-  "theme_color": "#07111f",
+  "background_color": "#171615",
+  "theme_color": "#171615",
   "orientation": "any",
   "icons": [
     {
