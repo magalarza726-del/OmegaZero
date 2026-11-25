@@ -1,4 +1,4 @@
-import { Chess, OPENINGS, MASTER_PROBLEMS, loadDb, saveDb, getMigrationInfo, migrateLegacyData, declineLegacyMigration, clearGamesAndTraining, resetAllAppData, APP_VERSION, $, $$, clamp, esc, downloadText, FIDE_RULES_VERSION, buildGameStats, buildTrainingStats, buildPlayerEloStats, applyAccessibility, playTone, publicAsset } from '../app/deps.js';
+import { Chess, OPENINGS, MASTER_PROBLEMS, loadDb, saveDb, getMigrationInfo, migrateLegacyData, declineLegacyMigration, clearGamesAndTraining, resetAllAppData, APP_VERSION, $, $$, clamp, esc, downloadText, FIDE_RULES_VERSION, buildGameStats, buildTrainingStats, applyAccessibility, playTone, publicAsset } from '../app/deps.js';
 import { THEMES } from '../app/config.js';
 export const appChromePatch={
  bindGlobal(){
