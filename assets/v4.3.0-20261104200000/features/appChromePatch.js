@@ -39,14 +39,25 @@ export const appChromePatch={
   <section class="danger-zone"><h3>Administrar datos</h3><button data-clear-training>Borrar partidas y entrenamiento</button><small>Conserva preferencias, favoritas, piezas y tableros.</small><button data-reset-app class="danger">Restablecer toda la aplicación</button><small>Elimina localStorage e IndexedDB de OmegaZero.</small></section></div></div>`
  },
  renderHome(){
-  const gameStats=buildGameStats(this.db.games),trainingStats=buildTrainingStats(this.db.problems),v=$('#view');
-
-
-  v.innerHTML=`<section class="hero"><div><small>OMEGAZERO · CHESS LABORATORY</small><h1>Jugar. Aprender.<br>Investigar.</h1><p>Una sola aplicación con tres espacios claros: juega partidas, estudia decisiones y experimenta con nuevas representaciones matemáticas del ajedrez.</p><div class="hero-metrics"><span><b>${gameStats.total}</b> partidas</span><span><b>${trainingStats.total}</b> posiciones</span><span><b>${(trainingStats.average*100).toFixed(0)}%</b> rendimiento</span></div></div><div class="hero-logo"><img src="${publicAsset('omegazero-logo.png', APP_VERSION)}" alt="Logo OmegaZero"></div></section>
-  <section class="home-domain home-domain-play" aria-labelledby="domain-play"><header><div><small>01 · EXPERIENCIA DE PARTIDA</small><h2 id="domain-play">Jugar</h2></div><p>Elige los jugadores y después la variante. En ajedrez clásico puedes usar S-COM, T-COM o E-COM.</p></header><div class="home-grid domain-grid"><button data-go="setup" data-mode="pvp"><b>PARTIDA</b><span>J1 vs J2</span></button><button data-go="setup" data-mode="pvc"><b>PARTIDA CONFIGURABLE</b><span>J1 vs COM</span><em>S-COM · T-COM · E-COM</em></button><button data-go="setup" data-mode="cvc"><b>SIMULACIÓN</b><span>COM vs COM</span><em>combina S/T/E por bando</em></button></div></section>
-  <section class="home-domain home-domain-learn" aria-labelledby="domain-learn"><header><div><small>02 · ENTRENAMIENTO Y COMPRENSIÓN</small><h2 id="domain-learn">Aprender</h2></div><p>Analiza posiciones, entrena decisiones estratégicas y revisa tus partidas y aperturas como material de estudio.</p></header><div class="home-grid domain-grid"><button data-go="analysis"><b>ANÁLISIS</b><span>Tablero de análisis</span></button><button data-go="strategy"><b>ESTRATEGIA</b><span>Entrenamiento estratégico</span><em>${this.db.problems.length} propias · ${MASTER_PROBLEMS.length} magistrales</em></button></div></section>
-  <section class="home-domain home-domain-research" aria-labelledby="domain-research"><header><div><small>03 · MODELOS EXPERIMENTALES</small><h2 id="domain-research">Investigar</h2></div><p>Construye modelos y taxonomías. Los tableros jugables viven en Jugar; las métricas posicionales viven como capas del Tablero de análisis.</p></header><div class="home-grid domain-grid"><button data-go="structureStudy" class="pawn-gallery-home-card structure-study-home-card"><b>TAXONOMÍA GEOMÉTRICA</b><span>Estudiar estructuras</span><em>Peones · familias curadas · piezas libres</em></button><button data-go="modelLab" class="transform-home-card tcom-home-card"><b>CEREBROS INTERCAMBIABLES</b><span>Modelos COM</span><em>S-COM · T-COM · E-COM</em></button><button data-go="stockfishTransform" class="transform-home-card"><b>LABORATORIO ALGEBRAICO</b><span>Transformada de Stockfish</span><em>Matrices · funciones · gráfica por semijugada</em></button></div></section>
-`;
+  const v=$('#view');
+  const card=(go,icon,title,description,mode='')=>`<button type="button" class="oz-dashboard-card" data-go="${go}" ${mode?`data-mode="${mode}"`:''}><span class="oz-dashboard-icon" aria-hidden="true">${icon}</span><span><strong>${title}</strong><small>${description}</small></span><span class="oz-arrow" aria-hidden="true">›</span></button>`;
+  v.innerHTML=`<main class="oz-dashboard" aria-label="Inicio de OmegaZero">
+    <header class="oz-dashboard-head"><div><h1>Inicio</h1><p>Elige una actividad para comenzar.</p></div></header>
+    <section class="oz-dashboard-section" aria-labelledby="domain-play"><header><h2 id="domain-play">Jugar</h2><p>Selecciona los jugadores y la variante.</p></header><div class="oz-dashboard-grid">
+      ${card('setup','♟','J1 vs J2','Dos jugadores en el mismo dispositivo','pvp')}
+      ${card('setup','♞','J1 vs COM','Juega contra la computadora','pvc')}
+      ${card('setup','⇄','COM vs COM','Simula partidas entre motores','cvc')}
+    </div></section>
+    <section class="oz-dashboard-section" aria-labelledby="domain-learn"><header><h2 id="domain-learn">Aprender</h2><p>Estudia posiciones y practica tus decisiones.</p></header><div class="oz-dashboard-grid two">
+      ${card('analysis','▦','Tablero de análisis','Explora posiciones y continuaciones')}
+      ${card('strategy','◎','Entrenamiento estratégico','Resuelve posiciones y toma decisiones')}
+    </div></section>
+    <section class="oz-dashboard-section" aria-labelledby="domain-research"><header><h2 id="domain-research">Investigar</h2><p>Herramientas y modelos experimentales.</p></header><div class="oz-dashboard-grid">
+      ${card('structureStudy','▤','Estudiar estructuras','Peones, familias y piezas libres')}
+      ${card('modelLab','⚙','Modelos COM','Configura S-COM, T-COM y E-COM')}
+      ${card('stockfishTransform','ƒ','Transformada de Stockfish','Matrices, funciones y gráficas')}
+    </div></section>
+  </main>`;
   $$('[data-go]').forEach(button=>button.onclick=()=>{this.screen=button.dataset.go==='setup'?'variantPicker':button.dataset.go;if(this.screen==='analysis')this.analysisReturn=null;if(this.screen==='strategy')this.strategySource=null;if(button.dataset.mode)this.cfg.mode=button.dataset.mode;this.render()});
  },
 };
