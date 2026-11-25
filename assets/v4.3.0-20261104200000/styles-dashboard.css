@@ -1,0 +1,60 @@
+/* Compact OmegaZero interface and in-game matrix drawer. */
+#view:has(.oz-dashboard){width:min(1080px,94vw);padding:28px 0 48px}
+.oz-dashboard{display:grid;gap:26px;max-width:1080px;margin:0 auto}
+.oz-dashboard-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:0 0 12px;border-bottom:1px solid #ffffff16}
+.oz-dashboard-head h1{font-size:clamp(24px,3vw,34px);margin:0;letter-spacing:-.035em;color:#edf5fa}
+.oz-dashboard-head p{margin:6px 0 0;color:#a3b7c5;font-size:14px}
+.oz-dashboard-section{min-width:0}
+.oz-dashboard-section>header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px}
+.oz-dashboard-section h2{font-size:21px;margin:0;color:#e9f1f5;letter-spacing:-.02em}
+.oz-dashboard-section>header p{font-size:12px;color:#a0b4c2;margin:0}
+.oz-dashboard-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.oz-dashboard-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.oz-dashboard-card{appearance:none;display:grid;grid-template-columns:44px minmax(0,1fr) 18px;align-items:center;gap:12px;min-height:98px;width:100%;text-align:left;border:1px solid #ffffff1c;border-radius:12px;padding:16px;background:#0e1f2d;color:#edf5fa;cursor:pointer;transition:border-color .15s,background .15s}
+.oz-dashboard-card:hover,.oz-dashboard-card:focus-visible{background:#152b3a;border-color:var(--accent);outline:0}
+.oz-dashboard-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.oz-dashboard-icon{display:grid;place-items:center;width:44px;height:44px;border-radius:10px;background:#1b3444;color:var(--accent);font-size:23px;font-weight:700;line-height:1}
+.oz-dashboard-card strong{display:block;font-size:16px;line-height:1.2;margin:0 0 5px}
+.oz-dashboard-card small{display:block;font-size:12px;color:#b0c1cb;line-height:1.4;font-weight:400;letter-spacing:0}
+.oz-dashboard-card .oz-arrow{color:#83a3b5;font-size:18px;text-align:right}
+.oz-dashboard-section:first-of-type .oz-dashboard-card{border-top:2px solid var(--accent)}
+.oz-game-matrices{border:1px solid #ffffff22;border-radius:10px;padding:10px;margin:12px 0;background:#102331}
+.oz-game-matrices>small{display:block;color:#a6c1cc;font-size:10px;font-weight:700;letter-spacing:.08em;margin:0 0 8px}
+.oz-game-matrices>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.oz-game-matrices button{font:inherit;font-size:12px;font-weight:650;line-height:1.35;color:#e7f2f6;background:#173246;border:1px solid #426074;border-radius:7px;padding:9px 7px;cursor:pointer;min-height:42px}
+.oz-game-matrices button:hover,.oz-game-matrices button[aria-expanded=true]{border-color:var(--accent,#4ea9e8);background:#1d4153}
+.oz-matrix-drawer{position:fixed;z-index:80;top:0;right:0;bottom:0;width:min(450px,100vw);background:#0b1926;color:#e9f3f8;box-shadow:-10px 0 45px #0009;border-left:1px solid #3b5365;display:flex;flex-direction:column;overflow:hidden;font-family:Inter,Segoe UI,Arial,sans-serif}
+.oz-matrix-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 18px 12px}
+.oz-matrix-header small{font-size:10px;font-weight:700;color:#91becf;letter-spacing:.1em}
+.oz-matrix-header h2{font-size:22px;line-height:1.2;margin:5px 0 0}
+.oz-matrix-drawer button{font:inherit;cursor:pointer;color:#e9f3f8;background:#122b3c;border:1px solid #3c5869;border-radius:7px;padding:9px 11px}
+.oz-matrix-header button{font-size:26px;line-height:1;min-width:40px;min-height:40px}
+.oz-matrix-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:0 18px}
+.oz-matrix-tabs button[aria-pressed=true]{background:#24516a;border-color:#81c6e8;font-weight:700}
+.oz-matrix-summary{padding:12px 18px;border-bottom:1px solid #ffffff16}
+.oz-matrix-summary p{font-size:13px;line-height:1.45;color:#bdced8;margin:0 0 10px}
+.oz-matrix-summary>small{font-size:11px;color:#a2b9c7}
+.oz-matrix-progress{display:flex;align-items:center;gap:10px;margin-bottom:7px;font-size:12px;font-weight:700}
+.oz-matrix-progress progress{width:100%;height:9px;accent-color:#6fc2dc}
+.oz-matrix-progress span{white-space:nowrap}
+.oz-matrix-body{flex:1;min-height:0;overflow:auto;padding:12px 18px;overscroll-behavior:contain}
+.oz-matrix-group,.oz-matrix-scale{border:1px solid #ffffff20;border-radius:9px;background:#0f2231;margin:0 0 8px}
+.oz-matrix-group>summary,.oz-matrix-scale>summary{cursor:pointer;padding:12px;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;font-weight:700}
+.oz-matrix-group>summary::-webkit-details-marker,.oz-matrix-scale>summary::-webkit-details-marker{display:none}
+.oz-matrix-group>summary::after,.oz-matrix-scale>summary::after{content:'+';color:#8ac5dd;font-size:18px}
+.oz-matrix-group[open]>summary::after,.oz-matrix-scale[open]>summary::after{content:'−'}
+.oz-matrix-group>summary span{flex:1}
+.oz-matrix-group>summary small{color:#8fbdd0;font-size:12px}
+.oz-matrix-items{padding:0 10px 10px;display:grid;gap:5px}
+.oz-matrix-items>p,.oz-matrix-scale>p{font-size:12px;color:#a9c1ce;line-height:1.5;margin:0 2px 6px}
+.oz-matrix-scale>p{padding:0 12px 10px}
+.oz-matrix-check{display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:9px 7px;border-radius:6px;background:#0a1824;font-size:13px;line-height:1.4}
+.oz-matrix-check input{width:18px;height:18px;flex:0 0 18px;margin:0;accent-color:#69bfd6}
+.oz-matrix-level{display:inline-grid;place-items:center;min-width:22px;height:22px;background:#203c4b;color:#b9dfed;border-radius:5px;font-weight:700;font-size:12px}
+.oz-matrix-check input:checked~span{color:#8ecfb8}
+.oz-matrix-footer{display:flex;justify-content:space-between;gap:8px;padding:12px 18px max(12px,env(safe-area-inset-bottom));border-top:1px solid #ffffff20}
+.oz-matrix-footer button{font-size:12px}
+.oz-matrix-footer [data-matrix-done]{background:#94d3e9;color:#081522;font-weight:750}
+@media(max-width:760px){.oz-dashboard-grid{grid-template-columns:1fr}.oz-dashboard-grid.two{grid-template-columns:1fr}.oz-dashboard{gap:22px}.oz-dashboard-card{min-height:76px;padding:13px}.oz-dashboard-section>header{display:block}.oz-dashboard-section>header p{margin-top:5px}.oz-dashboard-head p{font-size:13px}}
+@media(max-width:480px){.oz-matrix-drawer{top:auto;height:min(82dvh,750px);max-height:88vh;width:100%;border-left:0;border-top:1px solid #3b5365;border-radius:16px 16px 0 0}.oz-matrix-header{padding:12px 14px 8px}.oz-matrix-header h2{font-size:20px}.oz-matrix-summary{padding:10px 14px}.oz-matrix-body{padding:10px 14px}.oz-game-matrices>div{grid-template-columns:1fr 1fr}}
+@media(prefers-reduced-motion:reduce){.oz-dashboard-card{transition:none}}
