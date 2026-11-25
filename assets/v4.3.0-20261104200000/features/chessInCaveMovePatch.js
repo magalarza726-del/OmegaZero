@@ -5,7 +5,7 @@ export const chessInCaveMovePatch={
   caveClickSquare(square){
     const lab=this.caveLab,state=lab?.state;
     if(!lab||!state||state.winner||lab.handoff||lab.comThinking)return;
-    if(lab.mode==='pvc'&&state.turn!==lab.humanColor)return;
+    if(lab.mode==='cvc'||(lab.mode==='pvc'&&state.turn!==lab.humanColor))return;
 
     const perspective=this.cavePerspective(),visible=caveVisibility(state,perspective);
     const selectedTarget=Boolean(lab.selected&&lab.legal.includes(square));
