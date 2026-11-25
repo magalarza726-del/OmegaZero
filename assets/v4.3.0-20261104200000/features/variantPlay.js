@@ -82,7 +82,7 @@ export function playVariantMove(lab,move){
   if(lab.result)return false;
   const legal=variantMoves(lab.chess,lab.id).find(m=>m.from===move.from&&m.to===move.to&&(m.promotion||'')===(move.promotion||''));
   if(!legal)return false;
-  const played=lab.chess.move({from:legal.from,to:legal.to,...(legal.promotion?{promotion:legal.promotion}:{})});
+  const played=lab.id==='antichess'?lab.chess.move(legal):lab.chess.move({from:legal.from,to:legal.to,...(legal.promotion?{promotion:legal.promotion}:{})});
   if(lab.id==='threecheck'&&lab.chess.isCheck())lab.checks[played.color]++;
   lab.history.push(played.san);lab.last=[played.from,played.to];lab.selected=null;
   const k=key(lab);lab.counts.set(k,(lab.counts.get(k)||0)+1);
