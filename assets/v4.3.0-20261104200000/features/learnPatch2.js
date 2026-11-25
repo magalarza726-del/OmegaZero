@@ -5,7 +5,7 @@ export const learnPatch2={
   for(const item of this.db.analysis||[])if(item.comment&&!this.analysisComments[item.id])this.analysisComments[item.id]=item.comment;
   const layers=this.analysisLayerSettings(),structure=this.analysisStructureSnapshot(),energy=this.analysisEnergySnapshot(),v=$('#view'),fromStrategy=this.analysisReturn==='strategy',wdl=estimateWdl(this.analysis?.[0]?.score||0),opening=identifyOpening([],this.chess.fen()),current=this.analysisTimeline[this.analysisIndex];
   const editor=this.analysisEdit.enabled?`<section class="position-editor"><h3>Editor de posición</h3><div class="editor-pieces">${['wK','wQ','wR','wB','wN','wP','bK','bQ','bR','bB','bN','bP','empty'].map(piece=>`<button data-editor-piece="${piece}" class="${this.analysisEdit.piece===piece?'active':''}">${piece==='empty'?'Vacío':piece}</button>`).join('')}</div><div class="row"><button data-editor-turn="w">Juegan blancas</button><button data-editor-turn="b">Juegan negras</button><button data-editor-clear>Vaciar tablero</button></div><small>Toca para colocar/reemplazar. Arrastra suavemente cualquier pieza para moverla libremente; clic derecho elimina. Las capas Acción/Subacción siguen disponibles durante la edición.</small></section>`:'';
-  const quality=this.analysisMoveQuality?`<div class="analysis-played-card ${this.analysisMoveQuality.key||''}"><span>JUGADA REALIZADA</span><div><b>${this.analysisMoveQuality.san}</b><strong>${this.analysisMoveQuality.label}</strong></div><p>${this.analysisMoveQuality.detail||'Stockfish está comparando la jugada.'}</p></div>`:'';
+
   v.innerHTML=`<section class="page-head analysis-page-head"><button data-back aria-label="Volver">←</button><div><small>ENTRENAR · ${opening?.name||'Posición libre'}</small><h1>Tablero de análisis</h1></div>${fromStrategy?'<button id="returnStrategy" class="return-strategy">← VOLVER A ESTRATEGIA</button>':`<div class="live-badge ${layers.stockfish?'':'off'}">${layers.stockfish?'● STOCKFISH EN TIEMPO REAL':'○ STOCKFISH DESACTIVADO'}</div>`}</section>
   <section class="analysis-workspace">
    <div class="analysis-board-column">
@@ -16,7 +16,7 @@ export const learnPatch2={
    <aside class="analysis-console">
     ${this.analysisLayerControlsHtml(structure)}
     <header class="analysis-console-head"><div><small>${layers.stockfish?'STOCKFISH 18':'STOCKFISH · OFF'}</small><h2>${layers.stockfish?(this.analysis?.[0]?scoreText(this.analysis[0]):'Calculando…'):'—'}</h2></div><div><span>Prof. ${this.analysis?.[0]?.depth||this.cfg.depth}</span><span>${this.cfg.multiPv} variante${this.cfg.multiPv===1?'':'s'}</span></div></header>
-    ${quality}
+
     <section class="analysis-candidates"><header><h3>Mejores continuaciones</h3><span>${this.analysisBusy?'Actualizando…':'En tiempo real'}</span></header><div id="analysis-results">${this.analysisHtml()}</div></section>
     <section class="analysis-moves-card"><header><h3>Jugadas</h3><span>${Math.floor((this.analysisTimeline.length-1)/2)} completas</span></header><div class="analysis-moves-list">${this.analysisMoveListHtml()}</div></section>
     <section class="analysis-wdl"><span><b>${(wdl.white*100).toFixed(0)}%</b> Blancas</span><span><b>${(wdl.draw*100).toFixed(0)}%</b> Tablas</span><span><b>${(wdl.black*100).toFixed(0)}%</b> Negras</span></section>
