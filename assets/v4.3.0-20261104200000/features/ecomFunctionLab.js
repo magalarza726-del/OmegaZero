@@ -9,7 +9,7 @@ export const ECOM_PRESETS=Object.freeze({
  zero:'f=5x_{13}+4x_{12}-6x_{9}-2x_{14}-2x_{15}',
  positional:'f=2x_{1}+3x_{2}+5x_{3}+4x_{18}+2x_{19}-2x_{9}+5x_{13}',
  endgame:'f=5x_{13}+8x_{16}-2x_{14}-2x_{15}-2x_{9}',
- adaptive:'g=2x_{1}+3x_{3}+5x_{13}-3x_{9}\nh=5x_{13}+8x_{16}-3x_{9}\nf=x_{20}g+(1-x_{20})h'
+ adaptive:'g=2x_{1}+3x_{3}+5x_{13}-3x_{9}\nh=5x_{13}+8x_{16}-3x_{9}\nf=x_{20}*g+(1-x_{20})*h'
 });
 export function ecomSideConfig(config,color){
  const side=color==='b'?'B':'W';
