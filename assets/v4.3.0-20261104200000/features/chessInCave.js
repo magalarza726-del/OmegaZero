@@ -13,7 +13,7 @@ function squareOrder(perspective){
     : {ranks:[1,2,3,4,5,6,7,8],files:[7,6,5,4,3,2,1,0]};
 }
 
-function validMode(value){return value==='pvc'?'pvc':'pvp'}
+function validMode(value){return ['pvp','pvc','cvc'].includes(value)?value:'pvp'}
 function validColor(value){return value==='b'?'b':'w'}
 
 export const chessInCaveMethods={
@@ -39,7 +39,7 @@ export const chessInCaveMethods={
 
   renderCaveSetup(){
     const v=$('#view'),cfg=this.caveConfig();
-    v.innerHTML=`<section class="page-head cave-page-head"><button data-cave-back>←</button><div><small>VARIANTE · INFORMACIÓN PARCIAL</small><h1>Chess in the Cave</h1></div></section>
+    v.innerHTML=`<section class="page-head cave-page-head"><button data-cave-back>←</button><div><small>VARIANTE · INFORMACIÓN PARCIAL</small><h1>In the night</h1></div></section>
     <section class="cave-intro-grid">
       <article class="panel cave-intro">
         <small>REGLA CENTRAL</small><h2>Ves únicamente lo que tus piezas revelan.</h2>
@@ -89,7 +89,7 @@ export const chessInCaveMethods={
       selected:null,legal:[],handoff:false,comThinking:false,comTimer:null,session:1
     };
     this.renderCaveGame();
-    if(mode==='pvc'&&this.caveLab.state.turn!==humanColor)this.scheduleCaveComMove();
+    if(mode==='cvc'||(mode==='pvc'&&this.caveLab.state.turn!==humanColor))this.scheduleCaveComMove();
   },
 
   cavePerspective(){
@@ -155,22 +155,23 @@ export const chessInCaveMethods={
 
     const visible=this.caveVisibleSquares(),gameOver=Boolean(state.winner);
     const winner=state.winner==='draw'?'Tablas':state.winner?`${SIDE[state.winner]} ganan`:'';
-    const isComTurn=lab.mode==='pvc'&&!gameOver&&state.turn!==lab.humanColor;
-    const heading=gameOver?winner:(isComTurn?(lab.comThinking?'COM explorando la cueva…':'Turno del COM'):`Turno de ${SIDE[state.turn]}`);
-    const modeLabel=lab.mode==='pvc'?`J1 (${SIDE[lab.humanColor]}) vs COM`:'J1 vs J2';
+    const isComTurn=!gameOver&&(lab.mode==='cvc'||(lab.mode==='pvc'&&state.turn!==lab.humanColor));
+    const heading=gameOver?winner:(isComTurn?(lab.comThinking?'COM explorando la noche…':'Turno del COM'):`Turno de ${SIDE[state.turn]}`);
+    const modeLabel=lab.mode==='cvc'?'COM vs COM':lab.mode==='pvc'?`J1 (${SIDE[lab.humanColor]}) vs COM`:'J1 vs J2';
     const history=gameOver?`<section class="cave-history"><h3>Historial revelado</h3><div>${state.history.map((m,i)=>`<span><b>${i+1}.</b> ${m.notation}</span>`).join('')}</div></section>`:'';
 
-    v.innerHTML=`<section class="page-head cave-page-head"><button data-cave-exit>←</button><div><small>CHESS IN THE CAVE · ${modeLabel}${lab.fog?' · NIEBLA':''}</small><h1>${heading}</h1></div><span class="cave-vision-count">${gameOver?'64':visible.size} casillas visibles</span></section>
+    v.innerHTML=`<section class="page-head cave-page-head"><button data-cave-exit>←</button><div><small>IN THE NIGHT · ${modeLabel}${lab.fog?' · NIEBLA':''}</small><h1>${heading}</h1></div><span class="cave-vision-count">${gameOver?'64':visible.size} casillas visibles</span></section>
     <section class="cave-game-layout">
-      <div class="cave-board-shell ${isComTurn?'cave-com-active':''}"><div id="caveBoard" class="cave-board" style="${this.customBoardStyle()}">${this.caveBoardHtml()}</div><div class="cave-board-caption">${gameOver?'LA CUEVA SE ABRIÓ · TABLERO COMPLETO':isComTurn?'EL COM ESTÁ EXPLORANDO':'VES LO QUE TUS PIEZAS REVELAN'}</div></div>
+      <div class="cave-board-shell ${isComTurn?'cave-com-active':''}"><div id="caveBoard" class="cave-board" style="${this.customBoardStyle()}">${this.caveBoardHtml()}</div><div class="cave-board-caption">${gameOver?'AMANECIÓ · TABLERO COMPLETO':isComTurn?'EL COM ESTÁ EXPLORANDO':'VES LO QUE TUS PIEZAS REVELAN'}</div></div>
       <aside class="panel cave-side-panel"><small>REGLAS ACTIVAS · ${modeLabel}</small><h2>${gameOver?'Partida terminada':isComTurn?'COM pensando…':'Información parcial'}</h2>
       ${gameOver?`<div class="cave-result"><strong>${winner}</strong><p>${state.result||''} · Al terminar se revela el tablero completo y el historial.</p></div>`:`<p>La oscuridad no revela color, ocupación ni piezas enemigas. El borde de penumbra es únicamente visual y no añade información.</p>`}
       <div class="cave-rules-mini"><span>◈ Tu pieza siempre revela su propia casilla.</span><span>◈ Peón: avance inmediato visible + diagonales de captura.</span><span>◈ Torre, alfil y dama: línea continua hasta el primer bloqueo.</span><span>◈ Caballo y rey: casillas alcanzadas por su geometría.</span><span>◈ El rey se captura directamente.</span>${lab.fog?'<span>◈ Niebla: piezas aliadas aisladas aparentan ser peones.</span>':''}${lab.mode==='pvc'?'<span>◈ El COM no usa reglas de jaque estándar; juega con el motor propio de la variante.</span>':''}</div>
-      ${history}<div class="row"><button id="restartCave">Nueva partida</button></div></aside>
+      ${history}<div class="row">${lab.mode==='cvc'&&!gameOver?`<button id="pauseCave">${lab.paused?'Reanudar':'Pausar'}</button>`:''}<button id="restartCave">Nueva partida</button></div></aside>
     </section>`;
 
     $$('[data-cave-square]').forEach(button=>button.onclick=()=>this.caveClickSquare(button.dataset.caveSquare));
     $('[data-cave-exit]').onclick=()=>this.exitCaveGame();
+    $('#pauseCave')?.addEventListener('click',()=>{lab.paused=!lab.paused;if(lab.paused)this.cancelCaveCom(false);this.renderCaveGame();if(!lab.paused)this.scheduleCaveComMove()});
     $('#restartCave').onclick=()=>{this.cancelCaveCom();this.caveLab.phase='setup';this.renderCaveSetup()};
   },
 
@@ -211,7 +212,7 @@ export const chessInCaveMethods={
 
   scheduleCaveComMove(delay=520){
     const lab=this.caveLab,state=lab?.state;
-    if(!lab||lab.mode!=='pvc'||state.winner||state.turn===lab.humanColor||lab.comThinking)return;
+    if(!lab||!['pvc','cvc'].includes(lab.mode)||state.winner||(lab.mode==='pvc'&&state.turn===lab.humanColor)||lab.comThinking||lab.paused)return;
     this.cancelCaveCom(false);
     lab.comThinking=true;
     const token=lab.session;
@@ -219,7 +220,7 @@ export const chessInCaveMethods={
 
     lab.comTimer=setTimeout(()=>{
       const current=this.caveLab;
-      if(!current||current!==lab||current.session!==token||this.screen!=='chessInCave'||current.mode!=='pvc'||current.state.winner||current.state.turn===current.humanColor){
+      if(!current||current!==lab||current.session!==token||this.screen!=='chessInCave'||!['pvc','cvc'].includes(current.mode)||current.state.winner||(current.mode==='pvc'&&current.state.turn===current.humanColor)||current.paused){
         if(current===lab)current.comThinking=false;
         return;
       }
@@ -236,6 +237,7 @@ export const chessInCaveMethods={
       current.selected=null;current.legal=[];
       if(result.ok)playTone?.(result.move?.captured?'capture':'move',{enabled:this.db.settings.sound!==false,pack:this.db.settings.soundPack||'minimal',volume:(this.db.settings.soundVolume??70)/100});
       this.renderCaveGame();
+      if(current.mode==='cvc'&&!current.state.winner)this.scheduleCaveComMove(delay);
     },delay);
   },
 
@@ -248,8 +250,8 @@ export const chessInCaveMethods={
   },
 
   exitCaveGame(){
-    if(this.caveLab?.phase==='game'&&!this.caveLab.state.winner&&this.caveLab.state.ply>0&&!confirm('¿Salir de Chess in the Cave? La partida actual se perderá.'))return;
+    if(this.caveLab?.phase==='game'&&!this.caveLab.state.winner&&this.caveLab.state.ply>0&&!confirm('¿Salir de In the night? La partida actual se perderá.'))return;
     this.cancelCaveCom();
-    this.caveLab=null;this.screen='home';this.render();
+    this.caveLab=null;this.screen='variantPicker';this.render();
   }
 };
