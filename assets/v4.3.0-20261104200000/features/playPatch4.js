@@ -14,8 +14,8 @@ export const playPatch4={
      const decision=chooseMultivariateMoveOnePly(chess,compileEcomFormula(side.formula).evaluate),best=decision.best;
      const pack=item=>({uci:item.from+item.to+item.promotion,score:item.mate?1000000:item.objective,san:item.san,variables:item.variables});
      if(!best)return {chosen:null,candidates:[],quality:{key:'experimental',label:'E-COM · función indefinida',detail:'Ninguna candidata produce un valor finito. Revisa el dominio en Modelos COM.'}};
-     return {chosen:pack(best),candidates:decision.candidates.filter(c=>c.mate||c.objective!==null).map(pack),quality:{key:'experimental',label:'E-COM · '+side.name,detail:best.san+' · '+(best.mate?'Mate inmediato':best.draw?'Tablas':('f = '+Number(best.objective).toPrecision(6)))+' · una semijugada'}};
-    }catch(error){return {chosen:null,candidates:[],quality:{key:'experimental',label:'E-COM · error de función',detail:String(error.message||error)}}}
+     return {chosen:pack(best),candidates:decision.candidates.filter(c=>c.mate||c.objective!==null).map(pack),quality:{key:'experimental',label:'E-COM · '+esc(side.name),detail:best.san+' · '+(best.mate?'Mate inmediato':best.draw?'Tablas':('f = '+Number(best.objective).toPrecision(6)))+' · una semijugada'}};
+    }catch(error){return {chosen:null,candidates:[],quality:{key:'experimental',label:'E-COM · error de función',detail:esc(String(error.message||error))}}}
    }
    const cfg=this.energyConfig(),priority=color==='w'?cfg.priorityW:cfg.priorityB,decision=chooseEnergyMoveOnePly(chess,{g:cfg.g,massMode:cfg.massMode,kingWeight:cfg.kingWeight},priority),best=decision.best;
    if(!best)return {chosen:null,candidates:[],quality:null};
