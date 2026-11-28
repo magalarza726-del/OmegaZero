@@ -7,6 +7,7 @@ export const VARIANTS = Object.freeze([
   {id:'threecheck',name:'Three-Check',description:'Jaque mate o da tres jaques en total.'},
   {id:'racing',name:'Racing Kings',description:'Lleva tu rey a la octava fila sin dar ni recibir jaque.'},
   {id:'antichess',name:'Antichess',description:'Las capturas son obligatorias. Gana quien se queda sin piezas o sin movimientos legales.'},
+  {id:'research960',name:'960 Research · 960-COM',description:'Ajedrez estándar y 960 vinculados; el tablero 960 tiene prioridad.'},
   {id:'night',name:'In the night',description:'Visión parcial, rey capturable y modificador Niebla.'}
 ]);
 const modes={pvp:'J1 vs J2',pvc:'J1 vs COM',cvc:'COM vs COM'};
@@ -127,6 +128,7 @@ export const variantPlayMethods={
     v.querySelectorAll('[data-variant]').forEach(btn=>btn.onclick=()=>{
       const id=btn.dataset.variant;
       if(id==='standard'){this.screen='setup';this.render();return}
+      if(id==='research960'){this.research960Return='variantPicker';this.research960Config={mode,number:'random',humanColor:'w',depth:14};this.screen='research960';this.render();return}
       if(id==='night'){this.cancelCaveCom?.();this.caveLab=null;this.db.settings.caveMode=mode;this.screen='chessInCave';this.render();return}
       this.variantId=id;this.variantLab=null;this.screen='variantGame';this.render();
     });
