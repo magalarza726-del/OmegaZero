@@ -1,5 +1,5 @@
 import { Chess, chooseBotCandidate, resolveBotScheme, chooseTransformMoveOnePly, chooseEnergyMoveOnePly, OPENINGS, getOpening, identifyOpening, openingTreeHtml, openingPreview, nextOpeningSan, MASTER_GAMES, saveDb, addGame, addProblemsFromGame, $, $$, clamp, esc, uciToMove, downloadText, fideGameState, timeoutResult, buildGameStats, announce, playTone } from '../app/deps.js';
-import { ecomSideConfig } from './ecomFunctionLab.js';
+import { ecomSideConfig } from './ecomFunctionLab.js?v=20261128-math-editor';
 import { THEMES } from '../app/config.js';
 export const playPatch1={
  comBrainOptions(selected='s'){return [['s','S-COM · Stockfish'],['t','T-COM · Transformación'],['e','E-COM · Energía']].map(([value,label])=>`<option value="${value}" ${selected===value?'selected':''}>${label}</option>`).join('')},
