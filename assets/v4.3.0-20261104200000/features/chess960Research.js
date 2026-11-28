@@ -1,10 +1,10 @@
 import { esc } from '../app/deps.js';
 import { new960Research, researchMoves, play960Research, linkedSquare } from '../core/chess960Research.js?v=20261127-relative';
-const modes={pvp:'J1 vs J2',pvc:'J1 vs COM',cvc:'COM vs COM'},files='abcdefgh';
+const modes={pvp:'J1 vs J2',pvc:'J1 vs COM',cvc:'COM vs COM'};
 const side=c=>c==='w'?'Blancas':'Negras';
 export const chess960ResearchMethods={
  cancel960Research(){
-  const l=this.research960;if(!l)return;clearTimeout(l.timer);l.timer=null;
+  const l=this.research960;if(!l)return;clearTimeout(l.timer);l.timer=null;if(this.drag?.context==='research960'){this.drag.ghost?.remove();this.drag.source?.classList.remove('drag-source');this.drag=null;}
   this.research960=null;if(l.busy)this.engine.stop();
  },
  render960Research(){
@@ -33,30 +33,68 @@ export const chess960ResearchMethods={
    return;
   }
   const turn=l.random.turn(),human=l.mode==='pvp'||(l.mode==='pvc'&&turn===l.humanColor),flip=l.mode==='pvc'&&l.humanColor==='b';
-  const ranks=flip?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1],fs=flip?[7,6,5,4,3,2,1,0]:[0,1,2,3,4,5,6,7];
   const targets=b=>{const from=linkedSquare(l,b,l.selected);return from&&!l.result?researchMoves(l,b,from):[]};
   const dest=(b,m)=>b==='random'&&m.castle?m.rookFrom:m.to;
+  const canMove=()=>human&&!l.result&&!l.paused&&!l.busy&&!l.promoting;
   const board=b=>{
-   const selected=linkedSquare(l,b,l.selected),moves=targets(b);let html='';
-   for(const rank of ranks)for(const f of fs){
-    const sq=files[f]+rank,p=l[b].get(sq),highlight=selected===sq,legal=moves.some(m=>dest(b,m)===sq);
-    html+='<button type="button" class="sq '+((f+rank)%2?'light':'dark')+(highlight?' selected':'')+(legal?' legal':'')+(l.last?.[b]?.includes(sq)?' last':'')+'" data-960-board="'+b+'" data-960-square="'+sq+'" aria-label="'+sq+(p?' '+p.color+p.type:'')+'" aria-pressed="'+highlight+'" '+(highlight?'style="box-shadow:inset 0 0 0 4px #e6bd70,inset 0 0 0 100px #e6bd7045"':'')+'>'+(p?'<img draggable="false" src="'+this.pieceSrc(p.color,p.type)+'" alt="'+p.color+p.type+'">':'')+(rank===(flip?8:1)?'<i class="file">'+files[f]+'</i>':'')+(f===(flip?7:0)?'<i class="rank">'+rank+'</i>':'')+'</button>';
-   }
-   return '<section style="min-width:0"><h2 style="margin:0 0 8px;font-size:1.15rem">'+(b==='classic'?'Ajedrez estándar · visión COM':'Ajedrez 960 · posición '+l.number+' · prioritario')+'</h2><div class="board-wrap" style="'+this.customBoardStyle()+';width:100%;max-width:100%;min-width:0"><div class="board" style="width:100%;max-width:100%;min-width:0">'+html+'</div></div>'+(b==='classic'&&l.result==='Fin por movimiento ilegal'?'<p role="status"><b>Fin por movimiento ilegal</b></p>':'')+'</section>';
+   const html=this.boardHtml(l[b],true,{flipped:flip,selected:linkedSquare(l,b,l.selected)||null,legalSquares:targets(b).map(m=>dest(b,m)),lastMove:l.last?.[b]||null,annotations:null});
+   return '<section style="min-width:0"><h2 style="margin:0 0 8px;font-size:1.15rem">'+(b==='classic'?'Ajedrez estándar · visión COM':'Ajedrez 960 · posición '+l.number+' · prioritario')+'</h2><div class="board-stage"><div class="board-wrap" style="'+this.customBoardStyle()+';width:100%;max-width:100%;min-width:0"><div class="board" data-960-board="'+b+'" aria-label="'+(b==='classic'?'Ajedrez estándar':'Ajedrez 960')+'">'+html+'</div></div></div>'+(b==='classic'&&l.result==='Fin por movimiento ilegal'?'<p role="status"><b>Fin por movimiento ilegal</b></p>':'')+'</section>';
   };
   const status=l.result||('Turno de '+side(turn)+(l.busy?' · 960-COM calculando':l.paused?' · Pausado':''));
-  v.innerHTML=head+'<section class="panel"><div class="row"><b role="status">'+esc(status)+'</b><span>'+modes[l.mode]+' · posición '+l.number+' · '+l.history.length+' semijugadas</span>'+(l.mode!=='pvp'&&!l.result?'<button data-960-pause>'+(l.paused?'Reanudar':'Pausar')+'</button>':'')+'<button data-960-restart>Nueva partida</button></div>'+(l.detail?'<p>'+esc(l.detail)+'</p>':'')+'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px;align-items:start;max-width:1200px;margin:auto">'+board('classic')+board('random')+'</div><p class="hint">Selecciona una pieza en cualquiera de los tableros. En 960, para enrocar, selecciona el rey y después su torre. Se conservan la dirección, distancia, identidad y captura equivalentes.</p><div class="moves" style="max-height:180px;overflow:auto"><table style="width:100%;text-align:left"><thead><tr><th>Semijugada</th><th>Clásico</th><th>960</th></tr></thead><tbody>'+l.history.map((m,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(m.classic)+'</td><td>'+esc(m.random)+'</td></tr>').join('')+'</tbody></table></div></section>';
+  v.innerHTML=head+'<section class="panel"><div class="row"><b role="status">'+esc(status)+'</b><span>'+modes[l.mode]+' · posición '+l.number+' · '+l.history.length+' semijugadas</span>'+(l.mode!=='pvp'&&!l.result?'<button data-960-pause>'+(l.paused?'Reanudar':'Pausar')+'</button>':'')+'<button data-960-restart>Nueva partida</button></div>'+(l.detail?'<p>'+esc(l.detail)+'</p>':'')+'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px;align-items:start;max-width:1200px;margin:auto">'+board('classic')+board('random')+'</div><p class="hint">Selecciona o arrastra una pieza en cualquiera de los tableros. En 960, para enrocar, selecciona el rey y después su torre. Se conservan la dirección, distancia, identidad y captura equivalentes.</p><div class="moves" style="max-height:180px;overflow:auto"><table style="width:100%;text-align:left"><thead><tr><th>Semijugada</th><th>Clásico</th><th>960</th></tr></thead><tbody>'+l.history.map((m,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(m.classic)+'</td><td>'+esc(m.random)+'</td></tr>').join('')+'</tbody></table></div></section>';
   v.querySelector('[data-960-back]').onclick=back;
   v.querySelector('[data-960-restart]').onclick=()=>{this.cancel960Research();this.render960Research()};
   const pause=v.querySelector('[data-960-pause]');if(pause)pause.onclick=()=>{l.paused=!l.paused;if(!l.paused)l.detail='';clearTimeout(l.timer);l.timer=null;this.render960Research()};
-  v.querySelectorAll('[data-960-square]').forEach(btn=>btn.onclick=()=>{
-   if(!human||l.result||l.paused||l.busy)return;
-   const b=btn.getAttribute('data-960-board'),sq=btn.getAttribute('data-960-square'),options=targets(b).filter(m=>dest(b,m)===sq);
-   if(options.length){
-    let m=options[0];if(options.some(x=>x.promotion)){const p=prompt('Promoción: Q, R, B o N','Q');if(p===null)return;m=options.find(x=>x.promotion===p.toLowerCase());if(!m)return}
-    play960Research(l,b,m);
-   }else{const piece=l[b].get(sq),id=l.ids[b][sq];l.selected=piece?.color===turn&&l.selected!==id?id:null}
-   this.render960Research();
+  const moveFrom=async(b,from,to)=>{
+   if(!canMove()||this.research960!==l)return;
+   const options=researchMoves(l,b,from).filter(m=>dest(b,m)===to);
+   if(!options.length)return;
+   let m=options[0];
+   if(options.some(x=>x.promotion)){
+    l.promoting=true;try{const p=await this.choosePromotion();m=options.find(x=>x.promotion===p)}finally{l.promoting=false}
+    if(this.research960!==l||this.screen!=='research960'||!canMove()||!m)return;
+   }
+   play960Research(l,b,m);this.render960Research();
+  };
+  const paintSelection=()=>{
+   v.querySelectorAll('[data-960-board]').forEach(el=>{
+    const b=el.getAttribute('data-960-board'),selected=linkedSquare(l,b,l.selected),legal=new Set(targets(b).map(m=>dest(b,m)));
+    el.querySelectorAll('[data-square]').forEach(s=>{
+     const sq=s.dataset.square,active=sq===selected,allowed=legal.has(sq);
+     s.classList.toggle('selected',active);s.classList.toggle('legal',allowed);
+     s.classList.toggle('capture',allowed&&!!l[b].get(sq));s.classList.toggle('quiet',allowed&&!l[b].get(sq));
+    });
+   });
+  };
+  v.querySelectorAll('[data-960-board]').forEach(el=>{
+   const b=el.getAttribute('data-960-board');this.bindKeyboardBoard(el);
+   el.querySelectorAll('[data-square]').forEach(btn=>{
+    const sq=btn.dataset.square;
+    btn.onclick=()=>{
+     if(!canMove()||Date.now()<(this.suppress||0))return;
+     const from=linkedSquare(l,b,l.selected);
+     if(from&&targets(b).some(m=>dest(b,m)===sq)){void moveFrom(b,from,sq);return}
+     const piece=l[b].get(sq),id=l.ids[b][sq];l.selected=piece?.color===turn&&l.selected!==id?id:null;
+     this.render960Research();
+    };
+    btn.onpointerdown=e=>{
+     if(!canMove()||e.button!==0||l[b].get(sq)?.color!==turn)return;
+     // An already-selected king may castle by clicking its rook: leave this to click.
+     if(targets(b).some(m=>dest(b,m)===sq))return;
+     this.startVisualDrag(e,sq,'research960',l[b],{preserveAnnotations:true});
+     if(this.drag?.context==='research960'){
+      this.drag.previous960Selection=l.selected;l.selected=l.ids[b][sq];paintSelection();
+     }
+    };
+    btn.onpointermove=e=>this.dragMove(e);
+    btn.onpointerup=e=>{
+     const d=this.drag;if(!d||d.context!=='research960'||d.id!==e.pointerId)return;
+     const moved=d.moved,previous=d.previous960Selection;
+     this.endVisualDrag(e,(from,to)=>{void moveFrom(b,from,to)},{board:el,isLegal:(from,to)=>researchMoves(l,b,from).some(m=>dest(b,m)===to)});
+     if(!moved){l.selected=previous;paintSelection()}
+    };
+    btn.onpointercancel=e=>{if(this.drag?.context==='research960')this.endVisualDrag(e,()=>{},{cancel:true})};
+   });
   });
   if(!human&&!l.result&&!l.paused&&!l.busy&&!l.timer)l.timer=setTimeout(async()=>{
    l.timer=null;if(this.screen!=='research960'||this.research960!==l||l.paused||l.result)return;
