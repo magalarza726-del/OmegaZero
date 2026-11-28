@@ -1,11 +1,12 @@
+import { create960Observers, researchEvaluationText } from './chess960Observers.js?v=20261128-live960';
 import { esc } from '../app/deps.js';
-import { new960Research, researchMoves, play960Research, linkedSquare } from '../core/chess960Research.js?v=20261128-pawn-identity';
+import { new960Research, researchMoves, play960Research, linkedSquare } from '../core/chess960Research.js?v=20261128-live960';
 const modes={pvp:'J1 vs J2',pvc:'J1 vs COM',cvc:'COM vs COM'};
 const side=c=>c==='w'?'Blancas':'Negras';
 export const chess960ResearchMethods={
  cancel960Research(){
   const l=this.research960;if(!l)return;clearTimeout(l.timer);l.timer=null;if(this.drag?.context==='research960'){this.drag.ghost?.remove();this.drag.source?.classList.remove('drag-source');this.drag=null;}
-  this.research960=null;if(l.busy)this.engine.stop();
+  l.observers?.dispose();this.research960=null;if(l.busy)this.engine.stop();
  },
  render960Research(){
   const v=document.querySelector('#view'),l=this.research960;
@@ -32,16 +33,32 @@ export const chess960ResearchMethods={
    };
    return;
   }
+  const paintEvaluations=()=>{
+   if(this.research960!==l||this.screen!=='research960')return;
+   for(const b of ['classic','random']){
+    const el=v.querySelector('[data-960-evaluation="'+b+'"]'),s=l.observers?.sessions[b];
+    if(!el||!s)continue;
+    const value=s.value,score=researchEvaluationText(s),white=value?Math.max(3,Math.min(97,50+value.score/20)):50;
+    const state=s.status==='error'?'Análisis no disponible: '+s.error:s.status==='done'?'Stockfish · '+(value?.depth?'prof. '+value.depth:'posición final'):s.status==='analysing'?'Calculando · prof. '+value.depth:'Calculando…';
+    el.querySelector('[data-eval-score]').textContent=score;
+    el.querySelector('[data-eval-move]').textContent=value?.san?value.san+' ('+value.from+' → '+value.to+')':value?.terminal||'—';
+    el.querySelector('[data-eval-state]').textContent=state;
+    el.querySelector('[data-eval-bar]').style.width=white+'%';
+   }
+  };
+  if(!l.observers)l.observers=create960Observers(paintEvaluations);
+  const evaluation=b=>'<div class="research960-eval" data-960-evaluation="'+b+'"><div><small>Evaluación Stockfish</small><b data-eval-score>—</b></div><div><small>Mejor jugada independiente</small><b data-eval-move>—</b></div><div class="research960-evalbar" aria-hidden="true"><i data-eval-bar style="width:50%"></i></div><small data-eval-state>Calculando…</small></div>';
   const turn=l.random.turn(),human=l.mode==='pvp'||(l.mode==='pvc'&&turn===l.humanColor),flip=l.mode==='pvc'&&l.humanColor==='b';
   const targets=b=>{const from=linkedSquare(l,b,l.selected);return from&&!l.result?researchMoves(l,b,from):[]};
   const dest=(b,m)=>b==='random'&&m.castle?m.rookFrom:m.to;
   const canMove=()=>human&&!l.result&&!l.paused&&!l.busy&&!l.promoting;
   const board=b=>{
    const html=this.boardHtml(l[b],true,{flipped:flip,selected:linkedSquare(l,b,l.selected)||null,legalSquares:targets(b).map(m=>dest(b,m)),lastMove:l.last?.[b]||null,annotations:null});
-   return '<section><h2>'+(b==='classic'?'Ajedrez estándar · visión COM':'Ajedrez 960 · posición '+l.number+' · prioritario')+'</h2><div class="board-stage"><div class="board-wrap" style="'+this.customBoardStyle()+'"><div class="board" data-960-board="'+b+'" aria-label="'+(b==='classic'?'Ajedrez estándar':'Ajedrez 960')+'">'+html+'</div></div></div>'+(b==='classic'&&l.result==='Fin por movimiento ilegal'?'<p role="status"><b>Fin por movimiento ilegal</b></p>':'')+'</section>';
+   return '<section><h2>'+(b==='classic'?'Ajedrez estándar · visión COM':'Ajedrez 960 · posición '+l.number+' · prioritario')+'</h2>'+evaluation(b)+'<div class="board-stage"><div class="board-wrap" style="'+this.customBoardStyle()+'"><div class="board" data-960-board="'+b+'" aria-label="'+(b==='classic'?'Ajedrez estándar':'Ajedrez 960')+'">'+html+'</div></div></div>'+(b==='classic'&&l.result==='Fin por movimiento ilegal'?'<p role="status"><b>Fin por movimiento ilegal</b></p>':'')+'</section>';
   };
   const status=l.result||('Turno de '+side(turn)+(l.busy?' · 960-COM calculando':l.paused?' · Pausado':''));
   v.innerHTML='<section class="panel research960-game"><div class="row research960-toolbar"><button data-960-back aria-label="Volver">←</button><b>960 Research</b><b role="status">'+esc(status)+'</b><span>'+modes[l.mode]+' · posición '+l.number+' · '+l.history.length+' semijugadas</span>'+(l.mode!=='pvp'&&!l.result?'<button data-960-pause>'+(l.paused?'Reanudar':'Pausar')+'</button>':'')+'<button data-960-restart>Nueva partida</button></div>'+(l.detail?'<p>'+esc(l.detail)+'</p>':'')+'<div class="research960-boards">'+board('classic')+board('random')+'</div><p class="hint">Selecciona o arrastra una pieza en cualquiera de los tableros. En 960, para enrocar, selecciona el rey y después su torre. Se conservan la dirección y distancia de cada pieza vinculada; los peones se vinculan por su pieza inicial, no por columna.</p><div class="moves" style="max-height:180px;overflow:auto"><table style="width:100%;text-align:left"><thead><tr><th>Semijugada</th><th>Clásico</th><th>960</th></tr></thead><tbody>'+l.history.map((m,i)=>'<tr><td>'+(i+1)+'</td><td>'+esc(m.classic)+'</td><td>'+esc(m.random)+'</td></tr>').join('')+'</tbody></table></div></section>';
+  paintEvaluations();const observation=l.observers.refresh(l);
   v.querySelector('[data-960-back]').onclick=back;
   v.querySelector('[data-960-restart]').onclick=()=>{this.cancel960Research();this.render960Research()};
   const pause=v.querySelector('[data-960-pause]');if(pause)pause.onclick=()=>{l.paused=!l.paused;if(!l.paused)l.detail='';clearTimeout(l.timer);l.timer=null;this.render960Research()};
@@ -108,6 +125,10 @@ export const chess960ResearchMethods={
     if(this.research960!==l||this.screen!=='research960'||l.paused)return;
     const uci=decision?.chosen?.uci,m=researchMoves(l,'classic').find(m=>m.from+m.to+(m.promotion||'')===uci);
     if(!m)throw Error(decision?.quality?.detail||'El motor de Jugar no devolvió una jugada legal');
+    // Observers never supply the COM decision. Keep the current position visible
+    // until both independent analyses finish (or report an error).
+    await observation;
+    if(this.research960!==l||this.screen!=='research960'||l.paused)return;
     l.selected=l.ids.classic[m.from];l.busy=true;this.render960Research();
     await new Promise(resolve=>setTimeout(resolve,280));
     if(this.research960!==l||this.screen!=='research960'||l.paused)return;

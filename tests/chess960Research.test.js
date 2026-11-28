@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {backRank960,new960Research,researchMoves,play960Research,linkedSquare} from '../assets/v4.3.0-20261104200000/core/chess960Research.js';
+import {backRank960,new960Research,researchMoves,play960Research,linkedSquare,researchEngineFen,researchEngineMove} from '../assets/v4.3.0-20261104200000/core/chess960Research.js';
 const move=(l,b,u)=>researchMoves(l,b).find(m=>m.from+m.to+(m.promotion||'')===u);
 const play=(l,b,u)=>assert.equal(play960Research(l,b,move(l,b,u)),true,u);
 test('960 distinct starts, opposite bishops, king between rooks, unique identities',()=>{
@@ -54,4 +54,28 @@ test('all initial pawn movements maintain their relative vector and piece identi
    assert.equal(linkedSquare(l,'random',id),from[0]+m.to[1]);
   }
  }
+});
+
+test('observer FEN preserves castling rights in all 960 starts',()=>{
+ for(let i=0;i<960;i++){
+  const l=new960Research(i),rights=researchEngineFen(l,'random').split(' ')[2];
+  const row=backRank960(i),f='abcdefgh';
+  const a=f[row.indexOf('r')],h=f[row.lastIndexOf('r')];
+  assert.equal(rights,h.toUpperCase()+a.toUpperCase()+h+a);
+  assert.equal(researchEngineFen(l,'classic').split(' ')[2],'KQkq');
+ }
+});
+test('observer FEN tracks lost castling rights; UCI960 maps king-to-rook castling',()=>{
+ const l=new960Research(518);
+ for(const u of ['e2e4','e7e5','g1f3','b8c6','f1c4','g8f6'])play(l,'classic',u);
+ const m=researchEngineMove(l,'random','e1h1');
+ assert.equal(m.castle,'k');assert.equal(m.to,'g1');assert.equal(researchEngineMove(l,'classic','e1g1').castle,'k');
+ play(l,'classic','e1g1');
+ assert.equal(researchEngineFen(l,'random').split(' ')[2],'ha');
+});
+test('observer accepts legal independent moves even if not transferable',()=>{
+ const l=new960Research(39);
+ for(const u of ['d2d4','g8f6','g1f3','e7e6','e2e3'])play(l,'classic',u);
+ assert.equal(researchEngineMove(l,'classic','b7b6').san,'b6');
+ assert.equal(researchEngineMove(l,'random','a7a6'),null);
 });

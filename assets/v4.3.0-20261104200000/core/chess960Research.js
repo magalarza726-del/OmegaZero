@@ -98,3 +98,19 @@ export function play960Research(l,b,request){
  l.last={classic:[cm.from,cm.to],random:[rm.from,rm.to]};l.history.push({classic:cm.san,random:rm.san});
  const k=key(l);l.counts.set(k,(l.counts.get(k)||0)+1);l.result=terminal(l);return true;
 }
+
+// Stockfish expects Shredder-FEN castling files and UCI_Chess960 king-to-rook moves.
+export function researchEngineFen(l,board){
+ const fen=l[board].fen();
+ if(board==='classic')return fen;
+ const fields=fen.split(' '),rights=[];
+ for(const c of ['w','b'])for(const side of ['k','q']){
+  if(!l.rights[c+side])continue;
+  const rook=linkedSquare(l,'random',c+'r'+(side==='k'?'1':'0'));
+  if(rook&&l.random.get(rook)?.type==='r')rights.push(c==='w'?rook[0].toUpperCase():rook[0]);
+ }
+ fields[2]=rights.join('')||'-';return fields.join(' ');
+}
+export function researchEngineMove(l,board,uci){
+ return researchMoves(l,board).find(m=>m.from+(board==='random'&&m.castle?m.rookFrom:m.to)+(m.promotion||'')===uci)||null;
+}

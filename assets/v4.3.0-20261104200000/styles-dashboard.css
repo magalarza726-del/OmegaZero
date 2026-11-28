@@ -203,3 +203,14 @@ html,body,#app{background:#141212;color:var(--oz-text)}
 .research960-boards .board-stage{width:min(100%,max(240px,calc(100vh - 235px)));margin:0 auto}
 .research960-boards .board-wrap{width:100%;max-width:none}
 @media(max-width:700px){.research960-boards{grid-template-columns:minmax(0,1fr);gap:14px}.research960-boards .board-stage{width:min(100%,440px)}.research960-game.panel{padding:8px}}
+
+/* Compact independent Stockfish observations for 960 Research. */
+.research960-eval{width:min(100%,max(240px,calc(100vh - 310px)));margin:0 auto 8px;display:grid;grid-template-columns:1fr 1.5fr;gap:3px 12px;padding:7px 10px;background:#171e1b;border:1px solid #ad9b753d;border-radius:7px;box-sizing:border-box}
+.research960-eval>div:not(.research960-evalbar){display:grid;gap:2px;min-width:0}
+.research960-eval b{font-size:1rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.research960-eval small{font-size:.72rem;color:#d1c4ae}
+.research960-evalbar{grid-column:1/-1;height:5px;background:#111;border-radius:4px;overflow:hidden}
+.research960-evalbar i{display:block;height:100%;background:#efeee9;transition:width .18s}
+.research960-eval>[data-eval-state]{grid-column:1/-1}
+.research960-boards .board-stage{width:min(100%,max(240px,calc(100vh - 310px)))}
+@media(max-width:700px){.research960-eval,.research960-boards .board-stage{width:min(100%,440px)}}

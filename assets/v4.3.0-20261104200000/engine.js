@@ -5,8 +5,10 @@ import { publicAsset } from './publicAssets.js';
 const ENGINE_INIT_TIMEOUT_MS = 90000;
 
 export class StockfishEngine {
-  constructor(onStatus = () => {}) {
+  constructor(onStatus = () => {}, { hashMb = ENGINE_PROFILE.hashMb } = {}) {
     this.onStatus = onStatus;
+    this.hashMb = hashMb;
+    this.chess960Mode = false;
     this.worker = null;
     this.ready = false;
     this.initializing = null;
@@ -57,7 +59,7 @@ export class StockfishEngine {
     this.send('setoption name UCI_AnalyseMode value true');
     this.send('setoption name UCI_ShowWDL value true');
     this.send(`setoption name MultiPV value ${ENGINE_PROFILE.multiPv}`);
-    this.send(`setoption name Hash value ${ENGINE_PROFILE.hashMb}`);
+    this.send(`setoption name Hash value ${this.hashMb}`);
     await this.waitFor('readyok', () => this.send('isready'), ENGINE_INIT_TIMEOUT_MS);
     this.ready = true;
     this.onStatus('Motor listo · Stockfish 18');
@@ -65,6 +67,7 @@ export class StockfishEngine {
 
   async startWorker(workerUrl, previousError = null) {
     this.worker = new Worker(workerUrl);
+    this.chess960Mode = false;
     this.worker.onmessage = (event) => this.handleMessage(String(event.data));
     this.worker.onerror = (event) => {
       const detail = event?.message || previousError?.message || 'Error al cargar Worker/WASM';
@@ -164,13 +167,17 @@ export class StockfishEngine {
     }
   }
 
-  analyse(fen, { depth = ENGINE_PROFILE.depth, multiPv = ENGINE_PROFILE.multiPv, searchMoves = [], skill = 20, nodes = 0, movetime = 0, timeoutMs = 180000 } = {}) {
+  analyse(fen, { depth = ENGINE_PROFILE.depth, multiPv = ENGINE_PROFILE.multiPv, searchMoves = [], skill = 20, nodes = 0, movetime = 0, timeoutMs = 180000, chess960 = false, onProgress = null } = {}) {
     if (!this.ready) throw new Error('El motor todavía no está listo.');
     if (this.pending) this.stop();
     this.lines.clear();
     this.analysisTurn = String(fen).split(' ')[1] === 'b' ? 'b' : 'w';
     const effectiveMultiPv = searchMoves.length ? 1 : multiPv;
     this.configureStrength(skill);
+    if (this.chess960Mode !== Boolean(chess960)) {
+      this.send(`setoption name UCI_Chess960 value ${Boolean(chess960)}`);
+      this.chess960Mode = Boolean(chess960);
+    }
     this.send(`setoption name MultiPV value ${effectiveMultiPv}`);
     this.send(`position fen ${fen}`);
     const limitText = nodes > 0 ? `${Math.round(nodes)} nodos` : movetime > 0 ? `${Math.round(movetime)} ms` : `profundidad ${depth}`;
@@ -182,7 +189,7 @@ export class StockfishEngine {
         this.pending = null;
         reject(new Error('La búsqueda tardó demasiado.'));
       }, Math.max(5000, Number(timeoutMs) || 180000));
-      this.pending = { resolve, reject, timeout };
+      this.pending = { resolve, reject, timeout, onProgress };
       const restriction = searchMoves.length ? ` searchmoves ${searchMoves.join(' ')}` : '';
       const limit = nodes > 0 ? `nodes ${Math.round(nodes)}` : movetime > 0 ? `movetime ${Math.round(movetime)}` : `depth ${depth}`;
       this.send(`go ${limit}${restriction}`);
@@ -212,6 +219,7 @@ export class StockfishEngine {
         const score = this.analysisTurn === 'b' ? -rawScore : rawScore;
         const normalizedMate = rawMate === null ? null : (this.analysisTurn === 'b' ? -rawMate : rawMate);
         this.lines.set(pv, { uci: move, score, mate: normalizedMate, depth, variation, wdl });
+        if (pv === 1) this.pending?.onProgress?.(this.lines.get(pv));
       }
     }
 
