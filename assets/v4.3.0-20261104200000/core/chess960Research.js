@@ -57,10 +57,11 @@ export function new960Research(number,mode='pvp',humanColor='w'){
  const row=backRank960(number),classic=new Chess(),random=new Chess(row+'/pppppppp/8/8/8/8/PPPPPPPP/'+row.toUpperCase()+' w - - 0 1');
  const l={number,mode,humanColor,classic,random,ids:{classic:identities(classic),random:identities(random)},rights:{wk:true,wq:true,bk:true,bq:true},history:[],counts:new Map(),selected:null,last:null,result:null,paused:false,timer:null,busy:false};l.counts.set(key(l),1);return l;
 }
+const displacement=m=>[files.indexOf(m.to[0])-files.indexOf(m.from[0]),Number(m.to[1])-Number(m.from[1])];
 function match(l,b,m){
  const t=b==='classic'?'random':'classic',from=linkedSquare(l,t,l.ids[b][m.from]);
  if(!from)return null;
- return researchMoves(l,t,from).find(n=>(m.castle?n.castle===m.castle:!n.castle&&n.to===m.to)&&(n.promotion||'')===(m.promotion||'')&&capId(l,b,m)===capId(l,t,n))||null;
+ return researchMoves(l,t,from).find(n=>(m.castle?n.castle===m.castle:!n.castle&&displacement(n).every((v,i)=>v===displacement(m)[i]))&&(n.promotion||'')===(m.promotion||'')&&capId(l,b,m)===capId(l,t,n))||null;
 }
 function terminal(l){
  if(!researchMoves(l,'random').length)return l.random.isCheck()?'960: jaque mate':'960: tablas por ahogado';
