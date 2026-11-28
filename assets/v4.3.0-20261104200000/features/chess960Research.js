@@ -91,7 +91,7 @@ export const chess960ResearchMethods={
      const d=this.drag;if(!d||d.context!=='research960'||d.id!==e.pointerId)return;
      const moved=d.moved,previous=d.previous960Selection;
      this.endVisualDrag(e,(from,to)=>{void moveFrom(b,from,to)},{board:el,isLegal:(from,to)=>researchMoves(l,b,from).some(m=>dest(b,m)===to)});
-     if(!moved){l.selected=previous;paintSelection()}
+     if(!moved){l.selected=previous;paintSelection()}else this.suppress=Date.now()+250;
     };
     btn.onpointercancel=e=>{if(this.drag?.context==='research960')this.endVisualDrag(e,()=>{},{cancel:true})};
    });
