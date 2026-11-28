@@ -25,7 +25,7 @@ test('producción apunta a un único build activo declarado por version.json',()
 test('main.js es composition root y las áreas activas están modularizadas',()=>{
   const lines=main.split(/\r?\n/).length;
   assert.ok(lines<100,`main.js aún tiene ${lines} líneas`);
-  for(const module of ['appChromeBase','board','playBase','amongUsChess','chessInCave','learnBase','library','pawnGallery','structureStudyBase','freeStructureStudy','energyAnalysis','tcomBase','transform','modelLab']){
+  for(const module of ['appChromeBase','board','playBase','variantPlay','chess960Research','chessInCave','learnBase','library','pawnGallery','structureStudyBase','freeStructureStudy','energyAnalysis','tcomBase','transform','modelLab']){
     assert.ok(main.includes(`./features/${module}.js`),module);
     assert.ok(existsSync(join(features,module+'.js')),module);
   }
@@ -33,7 +33,7 @@ test('main.js es composition root y las áreas activas están modularizadas',()=
 
 test('inicio expone Jugar, Aprender e Investigar y sus destinos actuales',()=>{
   for(const label of ['Jugar','Aprender','Investigar']) assert.ok(featureSource.includes(label),label);
-  for(const destination of ['setup','analysis','strategy','library','stockfishTransform','tcomLab','energyAnalysis','amongUsChess','chessInCave','structureStudy']){
+  for(const destination of ['setup','analysis','strategy','library','stockfishTransform','tcomLab','energyAnalysis','research960','chessInCave','structureStudy']){
     assert.ok(featureSource.includes(destination),destination);
   }
 });
@@ -53,4 +53,12 @@ test('la página de producción no mezcla builds históricos',()=>{
 test('la refactorización conserva el namespace de datos de v2',()=>{
   const version=readFileSync(join(asset,'version.js'),'utf8');
   assert.ok(version.includes("STORAGE_NAMESPACE = 'omegazero:v2'"));
+});
+
+ test('960 Research comparte los motores visual y de decisión de Jugar',()=>{
+  const research=readFileSync(join(features,'chess960Research.js'),'utf8');
+  assert.ok(main.includes("research960:'render960Research'"));
+  assert.ok(research.includes('this.boardHtml('));
+  assert.ok(research.includes('this.chooseComBrainDecision('));
+  assert.ok(!research.includes('this.engine.analyse('));
 });

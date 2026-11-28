@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title OmegaZero Web v4.2.0
+title OmegaZero Web v4.4.0
 where node >nul 2>nul
 if errorlevel 1 (
   echo ERROR: Node.js 22 o superior no esta instalado.
