@@ -14,7 +14,7 @@ export const modelLabMethods={
   if(tab==='e')bindEcomFunctionPanel(this);
   $('[data-model-back]')?.addEventListener('click',()=>{this.screen='home';this.render()});
   const researchButton=document.createElement('button');researchButton.type='button';researchButton.textContent='960-COM';researchButton.onclick=()=>{this.research960Return='modelLab';this.research960Config=null;this.screen='research960';this.render()};v.querySelector('.model-lab-tabs')?.append(researchButton);
-  $('[data-model-tab]').forEach(button=>button.onclick=()=>{this.modelLabTab=button.dataset.modelTab;this.renderModelLab()});
+  $$('[data-model-tab]').forEach(button=>button.onclick=()=>{this.modelLabTab=button.dataset.modelTab;this.renderModelLab()});
   $('[data-open-tcom]')?.addEventListener('click',()=>{this.screen='tcomLab';this.render()});
   $$('[data-model-play]').forEach(button=>button.onclick=()=>{this.cfg.mode='pvc';this.cfg.brain=button.dataset.modelPlay;this.ensureOpponentConfigs();this.cfg.opponents[0].brain=this.cfg.brain;this.screen='setup';this.render()});
   $('[data-model-energy-analysis]')?.addEventListener('click',()=>{this.analysisLayers={...(this.analysisLayers||{}),energy:true};this.db.settings.analysisLayers={...this.analysisLayers};saveDb(this.db);this.analysisReturn=null;this.screen='analysis';this.render()});
