@@ -36,7 +36,7 @@ export const chess960ResearchMethods={
   const paintEvaluations=()=>{
    if(this.research960!==l||this.screen!=='research960')return;
    for(const b of ['classic','random']){
-    const el=v.querySelector('[data-960-evaluation="'+b+'"]'),s=l.observers?.sessions[b];
+    const el=document.querySelector('#view [data-960-evaluation="'+b+'"]'),s=l.observers?.sessions[b];
     if(!el||!s)continue;
     const value=s.value,score=researchEvaluationText(s),white=value?Math.max(3,Math.min(97,50+value.score/20)):50;
     const state=s.status==='error'?'Análisis no disponible: '+s.error:s.status==='done'?'Stockfish · '+(value?.depth?'prof. '+value.depth:'posición final'):s.status==='analysing'?'Calculando · prof. '+value.depth:'Calculando…';

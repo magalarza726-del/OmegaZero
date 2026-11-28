@@ -14,7 +14,7 @@ import { playPatch3 } from './features/playPatch3.js';
 import { playPatch4 } from './features/playPatch4.js?v=202610132205';
 import { playPatch5 } from './features/playPatch5.js';
 import { playPatch6 } from './features/playPatch6.js';
-import { chess960ResearchMethods } from './features/chess960Research.js?v=20261128-live960';
+import { chess960ResearchMethods } from './features/chess960Research.js?v=20261128-live960b';
 import { variantPlayMethods } from './features/variantPlay.js';
 import { chessInCaveMethods } from './features/chessInCave.js?v=202609152245';
 import { chessInCaveMovePatch } from './features/chessInCaveMovePatch.js?v=202609152245';
