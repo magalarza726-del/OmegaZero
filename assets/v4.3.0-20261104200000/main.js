@@ -15,7 +15,7 @@ import { playPatch4 } from './features/playPatch4.js?v=202610132205';
 import { playPatch5 } from './features/playPatch5.js';
 import { playPatch6 } from './features/playPatch6.js';
 import { chess960ResearchMethods } from './features/chess960Research.js?v=20261128-960-arrows-fix';
-import { variantPlayMethods } from './features/variantPlay.js';
+import { variantPlayMethods } from './features/variantPlay.js?v=20261128-fish';
 import { chessInCaveMethods } from './features/chessInCave.js?v=202609152245';
 import { chessInCaveMovePatch } from './features/chessInCaveMovePatch.js?v=202609152245';
 import { chessInCaveSetupPatch } from './features/chessInCaveSetupPatch.js?v=202609152245';

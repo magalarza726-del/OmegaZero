@@ -229,3 +229,7 @@ html,body,#app{background:#141212;color:var(--oz-text)}
 .research960-mark-tools{display:flex;justify-content:flex-end;margin-top:5px}
 .research960-game .research960-mark-tools button{padding:4px 8px;font-size:.72rem}
 .research960-boards [data-960-arrows]{position:absolute;inset:0;pointer-events:none;z-index:5}
+
+.fish-game .fish-file-selected{box-shadow:inset 0 0 0 4px #f5d742,inset 0 0 0 100px #f5d74244}
+.fish-game [data-fish-arrows]{position:absolute;inset:0;pointer-events:none;z-index:5}
+.fish-annotation{position:relative}.fish-annotation .annotation-tool{position:relative;inset:auto}.fish-annotation .annotation-pop{left:auto;right:0;top:calc(100% + 5px);z-index:12}.fish-annotation .swatch{padding:0!important}.fish-annotation .swatch.red{background:#ef5350!important}.fish-annotation .swatch.yellow{background:#f5d742!important}.fish-annotation .swatch.green{background:#48c774!important}.fish-annotation .swatch.blue{background:#4ea9e8!important}

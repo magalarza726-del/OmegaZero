@@ -2,6 +2,11 @@
 
 OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investigar ajedrez con Stockfish y modelos experimentales.
 
+## Fish Chess
+
+- Variante de Jugar: movimiento clásico o intercambio de dos columnas completas por turno, con ambos colores. El rey no puede terminar en jaque ni atravesar casillas amenazadas (se comprueban las posiciones antes y después del intercambio). El intercambio consume el turno, cancela la captura al paso y revoca derechos de enroque afectados. Mate y ahogado incluyen los intercambios legales.
+- Tablero, arrastre, promoción y anotaciones compartidos con Jugar. COM local de variantes, no Stockfish nativo (no conoce los intercambios).
+
 ## 960 Research · 960-COM (v4.4.0)
 
 - Acceso desde Investigar, Modelos COM o las tres modalidades de Jugar. Posición aleatoria o número Scharnagl 0–959 (518 = clásica).
