@@ -86,9 +86,10 @@ export const appChromePatch={
       ${card('structureStudy','structure','Estudiar estructuras','Analiza patrones de peones y estructuras recurrentes.','amber')}
       ${card('modelLab','gear','Modelos COM','Explora y ajusta S-COM, T-COM y E-COM.','orange')}
       ${card('stockfishTransform','transform','Transformada de Stockfish','Experimenta con representaciones matemáticas del ajedrez.','plum')}
+      ${card('research960','board','960 Research','Experimenta con tableros vinculados y la 960-COM.','emerald')}
     </div></section>
   </main>`;
-  $$('[data-go]').forEach(button=>button.onclick=()=>{this.screen=button.dataset.go==='setup'?'variantPicker':button.dataset.go;if(this.screen==='analysis')this.analysisReturn=null;if(this.screen==='strategy')this.strategySource=null;if(button.dataset.mode)this.cfg.mode=button.dataset.mode;this.render()});
+  $$('[data-go]').forEach(button=>button.onclick=()=>{this.screen=button.dataset.go==='setup'?'variantPicker':button.dataset.go;if(this.screen==='analysis')this.analysisReturn=null;if(this.screen==='strategy')this.strategySource=null;if(button.dataset.mode)this.cfg.mode=button.dataset.mode;if(this.screen==='research960'){this.research960Return='home';this.research960Config=null;}this.render()});
   $$('[data-home-section]').forEach(button=>button.onclick=()=>{
     const id=button.dataset.homeSection;
     $$('[data-home-section]').forEach(b=>{if(b===button)b.setAttribute('aria-current',id==='home'?'page':'location');else b.removeAttribute('aria-current')});
