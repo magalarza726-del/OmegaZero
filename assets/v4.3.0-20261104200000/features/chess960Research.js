@@ -1,5 +1,5 @@
 import { esc } from '../app/deps.js';
-import { new960Research, researchMoves, play960Research, linkedSquare } from '../core/chess960Research.js';
+import { new960Research, researchMoves, play960Research, linkedSquare } from '../core/chess960Research.js?v=20261127-relative';
 const modes={pvp:'J1 vs J2',pvc:'J1 vs COM',cvc:'COM vs COM'},files='abcdefgh';
 const side=c=>c==='w'?'Blancas':'Negras';
 export const chess960ResearchMethods={
