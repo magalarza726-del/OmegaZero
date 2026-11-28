@@ -3,7 +3,7 @@ export const DEFAULT_ECOM_FORMULA='f=0.2x_{1}+0.3x_{2}+x_{3}+0.4x_{6}+0.8x_{7}+0
 const builtins={abs:Math.abs,sqrt:Math.sqrt,sin:Math.sin,cos:Math.cos,tan:Math.tan,asin:Math.asin,acos:Math.acos,atan:Math.atan,ln:Math.log,log:Math.log10,exp:Math.exp,min:Math.min,max:Math.max,floor:Math.floor,ceil:Math.ceil,round:Math.round,sign:Math.sign,pow:Math.pow};
 const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function latexToText(source){
- let s=String(source).replace(/\\(?:left|right)/g,'').replace(/\\([{}])/g,'$1').replace(/\\(?:cdot|times)/g,'*').replace(/\\div/g,'/').replace(/\\(?:leq|le)/g,'<=').replace(/\\(?:geq|ge)/g,'>=').replace(/\\neq/g,'!=').replace(/\\pi/g,'pi').replace(/\\(?:quad|qquad|,|;|!)/g,' ').replace(/\\(sin|cos|tan|arcsin|arccos|arctan|ln|log|exp|min|max|abs|floor|ceil)\b/g,(_,n)=>n.replace('arc','a')).replace(/\\operatorname\{([A-Za-z]+)\}/g,'$1').replace(/([A-Za-z])_\{([A-Za-z0-9]+)\}/g,'$1$2').replace(/([A-Za-z])_([0-9]+)/g,'$1$2').replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/').replace(/≤/g,'<=').replace(/≥/g,'>=').replace(/≠/g,'!=').replace(/π/g,'pi');
+ let s=String(source).replace(/\\(?:mleft|mright|left|right)/g,'').replace(/\\lbrace\b/g,'{').replace(/\\rbrace\b/g,'}').replace(/\\(?:lvert|rvert|vert)\b/g,'|').replace(/\\colon\b/g,':').replace(/\\ /g,' ').replace(/\\([{}])/g,'$1').replace(/\\(?:cdot|times)/g,'*').replace(/\\div/g,'/').replace(/\\(?:leq|le)/g,'<=').replace(/\\(?:geq|ge)/g,'>=').replace(/\\neq/g,'!=').replace(/\\pi/g,'pi').replace(/\\(?:quad|qquad|,|;|!)/g,' ').replace(/\\(sin|cos|tan|arcsin|arccos|arctan|ln|log|exp|min|max|abs|floor|ceil)\b/g,(_,n)=>n.replace('arc','a')).replace(/\\(?:operatorname|mathrm|mathit)\{([A-Za-z]+)\}/g,'$1').replace(/([A-Za-z])_\{([A-Za-z0-9]+)\}/g,'$1$2').replace(/([A-Za-z])_([0-9]+)/g,'$1$2').replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/').replace(/≤/g,'<=').replace(/≥/g,'>=').replace(/≠/g,'!=').replace(/π/g,'pi');
  function group(i){while(/\s/.test(s[i]||'')&&i<s.length)i++;if(s[i]!=='{')throw Error('Se esperaba un grupo entre llaves');let depth=1,j=i+1;while(j<s.length&&depth){if(s[j]==='{')depth++;else if(s[j]==='}')depth--;j++}if(depth)throw Error('Falta cerrar una llave');return [s.slice(i+1,j-1),j]}
  for(let limit=0;limit<100;limit++){
   const m=/\\(?:frac|dfrac|tfrac|sqrt)\b/.exec(s);if(!m)break;
@@ -62,7 +62,8 @@ const xnames=Array.from({length:20},(_,i)=>'x'+(i+1));
 function walk(n,fn){fn(n);if(n.type==='call')n.args[1].forEach(a=>walk(a,fn));else n.args.filter(a=>a&&typeof a==='object').forEach(a=>walk(a,fn))}
 export function compileEcomFormula(source){
  if(String(source).length>12000)throw Error('Máximo 12000 caracteres');
- const lines=String(source).split(/\r?\n|;/).map(l=>l.trim()).filter(Boolean);
+ if(/\\(?:placeholder|prompt)\b/.test(source))throw Error('Completa los espacios pendientes de la expresión');
+ const lines=String(source).split(/\r?\n|(?<!\\);/).map(l=>l.trim()).filter(Boolean);
  if(!lines.length||lines.length>40)throw Error('Usa entre 1 y 40 expresiones');
  const defs=new Map(),raws=[];
  for(let i=0;i<lines.length;i++){
