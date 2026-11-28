@@ -5,7 +5,7 @@ OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investiga
 ## 960 Research · 960-COM (v4.4.0)
 
 - Acceso desde Investigar, Modelos COM o las tres modalidades de Jugar. Posición aleatoria o número Scharnagl 0–959 (518 = clásica).
-- El módulo reutiliza `chooseComBrainDecision` y los selectores de Jugar: S-COM, T-COM y E-COM; cada COM analiza exclusivamente la posición clásica. Cada pieza conserva su identidad: torres y caballos por orden inicial, alfiles por color de casilla, peones por columna. Las jugadas comparten el vector de desplazamiento relativo (dirección y distancia), no necesariamente la casilla de destino y las capturas deben eliminar la misma identidad; enroques por flanco.
+- El módulo reutiliza `chooseComBrainDecision` y los selectores de Jugar: S-COM, T-COM y E-COM; cada COM analiza exclusivamente la posición clásica. Cada pieza conserva su identidad: torres y caballos por orden inicial, alfiles por color de casilla, peones por la identidad de la pieza que tienen detrás en la posición inicial (rey, dama, torre, caballo o alfil). Las jugadas comparten el vector de desplazamiento relativo (dirección y distancia), no necesariamente la casilla de destino y las capturas deben eliminar la misma identidad; enroques por flanco.
 - Al no existir una réplica legal, la sesión se detiene con «Fin por movimiento ilegal». Si la jugada nació en 960 y era legal allí, se conserva solo en 960. Selección sincronizada, historial de ambas posiciones y pausa para COM.
 - Ambos tableros reutilizan el renderizador `boardHtml`, la personalización, navegación por teclado, arrastre y promoción de Jugar, con estado visual independiente por tablero.
 - Pruebas del núcleo en `tests/chess960Research.test.js`.

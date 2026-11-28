@@ -8,11 +8,28 @@ export function backRank960(n){
  const e=empty(),pairs=[];for(let i=0;i<5;i++)for(let j=i+1;j<5;j++)pairs.push([i,j]);
  const [i,j]=pairs[n];a[e[i]]=a[e[j]]='n';empty().forEach((f,k)=>a[f]='rkr'[k]);return a.join('');
 }
+// The pawn inherits the permanent identity of the back-rank piece in its
+// starting file. Use the classical file as the stable ID label, not the
+// actual file on the Chess960 board.
+function backRankIdentities(g,c){
+ const rr=rank(c),counts={},map={};
+ for(const f of files){
+  const p=g.get(f+rr).type,tag=p==='b'?String((files.indexOf(f)+Number(rr))%2):String(counts[p]||0);
+  counts[p]=(counts[p]||0)+1;map[f]=c+p+tag;
+ }
+ return map;
+}
 function identities(g){
- const map={};for(const c of ['w','b']){
- const rr=rank(c),pr=c==='w'?'2':'7',counts={};
- for(const f of files){map[f+pr]=c+'p'+f;const p=g.get(f+rr).type,tag=p==='b'?String((files.indexOf(f)+Number(rr))%2):String(counts[p]||0);counts[p]=(counts[p]||0)+1;map[f+rr]=c+p+tag;}
- }return map;
+ const map={},standard=new Chess();
+ for(const c of ['w','b']){
+  const rr=rank(c),pr=c==='w'?'2':'7',pieces=backRankIdentities(g,c),reference=backRankIdentities(standard,c);
+  const referenceFiles=Object.fromEntries(Object.entries(reference).map(([f,id])=>[id,f]));
+  for(const f of files){
+   map[f+rr]=pieces[f];
+   map[f+pr]=c+'p'+referenceFiles[pieces[f]];
+  }
+ }
+ return map;
 }
 export function linkedSquare(l,board,id){return id?Object.keys(l.ids[board]).find(s=>l.ids[board][s]===id):undefined}
 function path(a,b){const x=files.indexOf(a[0]),y=files.indexOf(b[0]);return Array.from({length:Math.abs(y-x)+1},(_,i)=>files[x+i*Math.sign(y-x)]+a[1])}
