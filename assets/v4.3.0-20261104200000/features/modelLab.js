@@ -1,6 +1,6 @@
 import { saveDb, $, $$, esc } from '../app/deps.js';
 
-import { ecomFunctionPanel, bindEcomFunctionPanel } from './ecomFunctionLab.js';
+import { ecomFunctionPanel, bindEcomFunctionPanel } from './ecomFunctionLab.js?v=20261128-math-editor';
 
 const brainLabel=brain=>brain==='t'?'T-COM':brain==='e'?'E-COM':'S-COM';
 
