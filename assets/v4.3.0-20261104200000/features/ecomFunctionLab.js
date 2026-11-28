@@ -1,7 +1,8 @@
 import { Chess } from '../vendor/chess.js';
 import { MULTIVARIATE_PARAMETERS, chooseMultivariateMoveOnePly } from '../core/multivariateChess.js';
-import { compileEcomFormula, formulaMathML, DEFAULT_ECOM_FORMULA } from '../core/ecomExpressions.js';
+import { compileEcomFormula, DEFAULT_ECOM_FORMULA } from '../core/ecomExpressions.js';
 import { esc, $ } from '../app/deps.js';
+import { mountExpressionEditor, MATH_SYMBOLS } from './ecomMathEditor.js';
 
 export const ECOM_PRESETS=Object.freeze({
  balanced:DEFAULT_ECOM_FORMULA,
@@ -22,20 +23,25 @@ export function ecomFunctionPanel(app){
  return '<section class="panel ecom-function-lab"><header><div><small>E-COM · PROFUNDIDAD 1</small><h2>Constructor de funciones</h2><p>Evalúa cada posición tras una jugada propia. No simula una respuesta rival.</p></div><span>20 variables</span></header>'+
  '<div class="ecom-tabs" role="group" aria-label="Bando de E-COM"><button type="button" data-ecom-color="w" aria-pressed="'+(color==='w')+'">♔ Blancas</button><button type="button" data-ecom-color="b" aria-pressed="'+(color==='b')+'">♚ Negras</button></div>'+
  '<div class="ecom-builder"><section class="ecom-editor"><label>Modelo del bando<select id="ecom-mode"><option value="function" '+(cfg.mode==='function'?'selected':'')+'>Función multivariable</option><option value="energy" '+(cfg.mode==='energy'?'selected':'')+'>Energía original U / K / E</option></select></label><label>Nombre de la función<input id="ecom-name" maxlength="60" value="'+esc(cfg.name)+'"></label><label>Plantilla<select id="ecom-preset"><option value="">Elegir una plantilla</option><option value="balanced">Equilibrada</option><option value="omega">Omega · agresiva</option><option value="zero">Zero · defensiva</option><option value="positional">Posicional</option><option value="endgame">Finalista</option><option value="adaptive">Adaptativa por fase</option></select></label>'+
- '<div class="ecom-expression-head"><b>Expresiones</b><span>LaTeX / notación matemática</span></div><div class="ecom-math-toolbar" aria-label="Insertar símbolos">'+[['frac','Fracción'],['power','Potencia'],['sqrt','Raíz'],['abs','Valor absoluto'],['ln','ln'],['log','log'],['sin','sin'],['cos','cos'],['if','Por tramos'],['line','Nueva línea']].map(([id,label])=>'<button type="button" data-ecom-symbol="'+id+'">'+label+'</button>').join('')+'</div><textarea id="ecom-formula" rows="7" spellcheck="false" autocapitalize="off" aria-label="Expresiones de E-COM">'+esc(cfg.formula)+'</textarea><div id="ecom-preview" class="ecom-math-preview" aria-label="Vista matemática"></div><div id="ecom-validation" role="status" class="ecom-validation"></div><small>Una definición por línea. Ejemplo: a=2, en otra línea g(t)=t^2, después f=g(x_1)+a x_3. Puedes usar x1 o x_{1}, fracciones, potencias, logaritmos, min/max y funciones por tramos.</small><div class="row"><button type="button" class="primary" id="ecom-save">Guardar función del bando</button><button type="button" id="ecom-copy">Copiar al otro bando</button></div><div class="row"><button type="button" data-ecom-play="pvc">Probar en J1 vs COM</button><button type="button" data-ecom-play="cvc">Probar E-COM vs E-COM</button></div></section>'+
+ '<div class="ecom-expression-head"><b>Expresiones</b><span>Editor matemático visual</span></div><div class="ecom-math-toolbar" aria-label="Insertar símbolos">'+[['frac','a/b','Fracción'],['power','x²','Potencia'],['sqrt','√','Raíz'],['abs','|x|','Valor absoluto'],['ln','ln','Logaritmo natural'],['log','log','Logaritmo decimal'],['sin','sin','Seno'],['cos','cos','Coseno'],['if','{…}','Por tramos'],['paren','( )','Paréntesis'],['undo','↶','Deshacer'],['redo','↷','Rehacer'],['line','＋','Nueva expresión']].map(([id,label,title])=>'<button type="button" data-ecom-symbol="'+id+'" title="'+title+'" aria-label="'+title+'">'+label+'</button>').join('')+'</div><div id="ecom-equations" class="ecom-equations" aria-label="Editor de ecuaciones"></div><div id="ecom-validation" role="status" class="ecom-validation"></div><small>Escribe directamente sobre la ecuación: / crea una fracción, ^ un exponente. Los botones de variables insertan símbolos en el cursor. Puedes definir constantes y funciones auxiliares en filas separadas.</small><div class="row"><button type="button" class="primary" id="ecom-save">Guardar función del bando</button><button type="button" id="ecom-copy">Copiar al otro bando</button></div><div class="row"><button type="button" data-ecom-play="pvc">Probar en J1 vs COM</button><button type="button" data-ecom-play="cvc">Probar E-COM vs E-COM</button></div></section>'+
  '<aside class="ecom-catalog"><h3>Variables disponibles</h3><p>Toca una variable para insertarla en la expresión. La perspectiva es siempre la del bando que evalúa.</p><div class="ecom-variable-list">'+MULTIVARIATE_PARAMETERS.map(p=>'<button type="button" data-ecom-var="'+p.id+'" title="'+esc(p.description)+'"><span>'+xhtml(p.id)+'</span><span><b>'+esc(p.name)+'</b><small>'+esc(p.description)+'</small></span></button>').join('')+'</div></aside></div>'+
  '<section class="ecom-test"><h3>Laboratorio de candidatas</h3><label>Posición FEN<input id="ecom-fen" value="'+esc(app.chess?.fen()||new Chess().fen())+'"></label><div class="row"><button type="button" id="ecom-initial">Posición inicial</button><button type="button" id="ecom-test" class="primary">Evaluar todas las jugadas legales</button></div><p class="hint">Se prueba la fórmula del editor desde el color al turno del FEN; no necesita Stockfish. Una función no guardada se puede probar.</p><div id="ecom-results" aria-live="polite"></div></section></section>';
 }
 export function bindEcomFunctionPanel(app){
- const field=$('#ecom-formula');if(!field)return;
+ const host=$('#ecom-equations');if(!host)return;
  const color=app.ecomEditColor||'w',suffix=color==='w'?'W':'B',other=color==='w'?'B':'W';
- const status=$('#ecom-validation'),preview=$('#ecom-preview'),name=$('#ecom-name'),mode=$('#ecom-mode');
- function validate(){try{const compiled=compileEcomFormula(field.value);preview.innerHTML=formulaMathML(compiled);status.textContent='Sintaxis válida · comprueba el dominio con una posición real.';status.dataset.ok='1';return compiled}catch(error){preview.textContent='';status.textContent=error.message;status.dataset.ok='0';return null}}
- function insert(value){field.focus();const start=field.selectionStart??field.value.length,end=field.selectionEnd??start;field.setRangeText(value,start,end,'end');validate()}
- field.addEventListener('input',validate);validate();
- document.querySelectorAll('[data-ecom-var]').forEach(b=>b.onclick=()=>insert('x_{'+b.dataset.ecomVar.slice(1)+'}'));
- const symbols={frac:'\\frac{x_{1}}{x_{2}}',power:'^{2}',sqrt:'\\sqrt{x_{1}}',abs:'\\left|x_{1}\\right|',ln:'\\ln(x_{1})',log:'\\log(x_{1})',sin:'\\sin(x_{1})',cos:'\\cos(x_{1})',if:'\\left\\{x_{20}>0.5:x_{3},x_{13}\\right\\}',line:'\n'};
- document.querySelectorAll('[data-ecom-symbol]').forEach(b=>b.onclick=()=>insert(symbols[b.dataset.ecomSymbol]));
+ const status=$('#ecom-validation'),name=$('#ecom-name'),mode=$('#ecom-mode');
+ let field;
+ function validate(source=field?.value??ecomSideConfig(app.energyConfig(),color).formula){
+  try{const compiled=compileEcomFormula(source);status.textContent='Sintaxis válida · comprueba el dominio con una posición real.';status.dataset.ok='1';return compiled}catch(error){status.textContent=error.message;status.dataset.ok='0';return null}
+ }
+ field=mountExpressionEditor(host,ecomSideConfig(app.energyConfig(),color).formula,source=>validate(source));validate();
+ const preserve=b=>b.addEventListener('pointerdown',e=>e.preventDefault());
+ document.querySelectorAll('[data-ecom-var]').forEach(b=>{preserve(b);b.onclick=()=>field.insert('x_{'+b.dataset.ecomVar.slice(1)+'}')});
+ document.querySelectorAll('[data-ecom-symbol]').forEach(b=>{preserve(b);b.onclick=()=>{
+  const id=b.dataset.ecomSymbol;
+  if(id==='line')field.addLine();else if(id==='undo'||id==='redo')field.command(id);else field.insert(MATH_SYMBOLS[id],true);
+ }});
  $('#ecom-preset').onchange=e=>{if(!e.target.value)return;field.value=ECOM_PRESETS[e.target.value];name.value=e.target.options[e.target.selectedIndex].textContent;validate()};
  function save(copy=false){if(!validate())return;const dest=copy?other:suffix;app.persistEnergyConfig({['formula'+dest]:field.value,['formulaName'+dest]:name.value.trim()||'Personalizada',['functionMode'+dest]:mode.value});status.textContent=copy?'Función y modo copiados al otro bando.':'Función y modo guardados.'}
  $('#ecom-save').onclick=()=>save();$('#ecom-copy').onclick=()=>save(true);
