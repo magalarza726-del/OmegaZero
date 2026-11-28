@@ -17,6 +17,11 @@ OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investiga
 - Observación Stockfish independiente y en vivo en ambos tableros: evaluación desde blancas y mejor jugada, 20.000 nodos por posición y tablero; UCI_Chess960 y derechos de enroque en Shredder-FEN. No influye en la decisión de la COM.
 - Pruebas del núcleo en `tests/chess960Research.test.js`.
 
+## v4.4.2
+
+- El constructor E-COM usa campos MathLive 0.110.0 editables visualmente, una expresión por fila, con fracciones, exponentes, raíces, navegación de cursor y botones de variables. Conserva las fórmulas existentes en LaTeX.
+- MathLive se carga bajo demanda desde jsDelivr o unpkg; si falla la red, se ofrece reintento y edición LaTeX de emergencia. El evaluador de ajedrez permanece local y no usa el motor de cálculo de MathLive.
+
 ## v4.4.0
 
 - E-COM multivariable: 20 métricas posicionales, funciones independientes por bando, expresiones matemáticas con sintaxis LaTeX compatible y vista MathML local, constantes, funciones auxiliares y expresiones por tramos.
