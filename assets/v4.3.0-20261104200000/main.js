@@ -28,7 +28,7 @@ import { libraryMethods } from './features/library.js';
 import { tcomMethods as tcomBase } from './features/tcomBase.js';
 import { tcomPatch } from './features/tcomPatch.js';
 import { transformMethods } from './features/transform.js';
-import { modelLabMethods } from './features/modelLab.js';
+import { modelLabMethods } from './features/modelLab.js?v=20261128-model-tabs-fix';
 import { installStabilityPatch } from './features/stabilityPatch.js';
 import { installVisibilityPatch } from './features/visibilityPatch.js';
 
