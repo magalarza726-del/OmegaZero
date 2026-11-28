@@ -8,6 +8,7 @@ OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investiga
 - El módulo reutiliza `chooseComBrainDecision` y los selectores de Jugar: S-COM, T-COM y E-COM; cada COM analiza exclusivamente la posición clásica. Cada pieza conserva su identidad: torres y caballos por orden inicial, alfiles por color de casilla, peones por la identidad de la pieza que tienen detrás en la posición inicial (rey, dama, torre, caballo o alfil). Las jugadas comparten el vector de desplazamiento relativo (dirección y distancia), no necesariamente la casilla de destino y las capturas deben eliminar la misma identidad; enroques por flanco.
 - Al no existir una réplica legal, la sesión se detiene con «Fin por movimiento ilegal». Si la jugada nació en 960 y era legal allí, se conserva solo en 960. Selección sincronizada, historial de ambas posiciones y pausa para COM.
 - Ambos tableros reutilizan el renderizador `boardHtml`, la personalización, navegación por teclado, arrastre y promoción de Jugar, con estado visual independiente por tablero.
+- Flechas y marcas manuales independientes por tablero con el motor de anotaciones de Jugar: clic derecho, arrastre derecho, paleta de cuatro colores y borrado individual. No alteran las posiciones ni las evaluaciones.
 - Observación Stockfish independiente y en vivo en ambos tableros: evaluación desde blancas y mejor jugada, 20.000 nodos por posición y tablero; UCI_Chess960 y derechos de enroque en Shredder-FEN. No influye en la decisión de la COM.
 - Pruebas del núcleo en `tests/chess960Research.test.js`.
 

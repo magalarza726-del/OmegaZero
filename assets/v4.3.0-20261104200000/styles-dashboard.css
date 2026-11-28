@@ -214,3 +214,18 @@ html,body,#app{background:#141212;color:var(--oz-text)}
 .research960-eval>[data-eval-state]{grid-column:1/-1}
 .research960-boards .board-stage{width:min(100%,max(240px,calc(100vh - 310px)))}
 @media(max-width:700px){.research960-eval,.research960-boards .board-stage{width:min(100%,440px)}}
+
+/* 960 Research uses Jugar's annotation palette and SVG geometry. */
+.research960-annotation{position:relative;flex:none}
+.research960-annotation .annotation-tool{position:relative;inset:auto}
+.research960-annotation .annotation-pop{left:auto;right:0;top:calc(100% + 6px);z-index:10}
+.research960-annotation .pencil{width:36px;height:36px;padding:0!important}
+.research960-annotation .annotation-pop .swatch{padding:0!important;border-radius:50%;border:3px solid transparent}
+.research960-annotation .annotation-pop .swatch.active{border-color:white}
+.research960-annotation .swatch.red{background:#ef5350!important}
+.research960-annotation .swatch.yellow{background:#f5d742!important}
+.research960-annotation .swatch.green{background:#48c774!important}
+.research960-annotation .swatch.blue{background:#4ea9e8!important}
+.research960-mark-tools{display:flex;justify-content:flex-end;margin-top:5px}
+.research960-game .research960-mark-tools button{padding:4px 8px;font-size:.72rem}
+.research960-boards [data-960-arrows]{position:absolute;inset:0;pointer-events:none;z-index:5}
