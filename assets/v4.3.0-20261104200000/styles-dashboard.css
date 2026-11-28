@@ -233,3 +233,29 @@ html,body,#app{background:#141212;color:var(--oz-text)}
 .fish-game .fish-file-selected{box-shadow:inset 0 0 0 4px #f5d742,inset 0 0 0 100px #f5d74244}
 .fish-game [data-fish-arrows]{position:absolute;inset:0;pointer-events:none;z-index:5}
 .fish-annotation{position:relative}.fish-annotation .annotation-tool{position:relative;inset:auto}.fish-annotation .annotation-pop{left:auto;right:0;top:calc(100% + 5px);z-index:12}.fish-annotation .swatch{padding:0!important}.fish-annotation .swatch.red{background:#ef5350!important}.fish-annotation .swatch.yellow{background:#f5d742!important}.fish-annotation .swatch.green{background:#48c774!important}.fish-annotation .swatch.blue{background:#4ea9e8!important}
+
+/* 4.4.2 · Structured, directly editable math rows. */
+.ecom-editor{min-width:0;grid-template-columns:minmax(0,1fr)}
+.ecom-builder{grid-template-columns:minmax(0,1fr) minmax(250px,32%);align-items:start}
+.ecom-equations{background:#fbfaf6;color:#242720;border:1px solid #d0c7b7;border-radius:11px;overflow:hidden;min-width:0}
+.ecom-equation-list{display:grid;min-width:0;max-height:430px;overflow-y:auto}
+.ecom-equation-row{display:grid;grid-template-columns:35px minmax(0,1fr) 32px;align-items:center;min-height:76px;border-bottom:1px solid #e1ddd2;background:#fffefb;position:relative}
+.ecom-equation-row.is-active{box-shadow:inset 4px 0 #26936b;background:#f5faf5}
+.ecom-equation-number{color:#867e6f;font-size:12px;text-align:center;align-self:stretch;display:grid;place-items:center;background:#f1eee6;border-right:1px solid #e1ddd2}
+.ecom-equation-row.is-active .ecom-equation-number{background:#d8eee0;color:#1f694c}
+.ecom-equation-row math-field{display:block;width:100%;min-width:0;min-height:68px;padding:13px 10px;box-sizing:border-box;border:none;outline:none;background:transparent;color:#1d271f;font-size:clamp(19px,2.1vw,27px);--caret-color:#187b56;--selection-background-color:#b8e3c8;--selection-color:#172e22;--contains-highlight-background-color:#e3f3e7;--primary:#187b56}
+.ecom-equation-row math-field::part(virtual-keyboard-toggle){color:#468b65}
+.ecom-equation-row math-field::part(menu-toggle){color:#82765f}
+.oz-vibrant .ecom-equation-row .ecom-equation-delete{align-self:start;margin:7px 4px 0 0;min-width:26px;height:29px;padding:0!important;border:0!important;background:transparent!important;color:#81766b!important;font-size:21px;line-height:1;cursor:pointer}
+.oz-vibrant .ecom-equation-row .ecom-equation-delete:hover{background:#f6e0d7!important;color:#a84730!important}
+.oz-vibrant .ecom-equations .ecom-add-expression{display:block;width:100%;text-align:left;padding:12px 16px;background:#f0f4ea!important;color:#24684a!important;border:0!important;border-bottom:1px solid #e1ddd2!important;border-radius:0;font-weight:700;cursor:pointer}
+.ecom-editor-help{display:block;padding:10px 13px;font-size:11px;color:#706c62!important;line-height:1.4}
+.ecom-math-toolbar{gap:6px;padding:5px 0}
+.ecom-math-toolbar button{min-width:40px;min-height:38px;font:600 17px/1.1 Georgia,serif;padding:7px 9px}
+.ecom-math-toolbar button[data-ecom-symbol="frac"]{font-style:italic}
+.ecom-math-toolbar button[data-ecom-symbol="line"]{margin-left:auto}
+.ecom-editor-loading,.ecom-load-error{padding:19px 16px;color:#4c5548;line-height:1.5;font-size:13px}
+.ecom-load-error button{display:block;margin-top:8px}
+.ecom-raw-fallback{box-sizing:border-box;width:100%;padding:12px;font:15px/1.6 monospace;border:0;color:#242720;background:#fffefb;resize:vertical}
+.ecom-variable-list{max-height:600px}
+@media(max-width:850px){.ecom-builder{grid-template-columns:minmax(0,1fr)}.ecom-variable-list{max-height:310px}.ecom-equation-row{grid-template-columns:28px minmax(0,1fr) 28px}.ecom-equation-row math-field{font-size:22px;padding:10px 6px}.ecom-math-toolbar button{min-width:34px;font-size:16px}.ecom-equation-list{max-height:350px}}
