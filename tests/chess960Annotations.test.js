@@ -29,3 +29,18 @@ test('scoped right-click annotations never modify the other board or main game',
   draw('e4','e4','classic',false);assert.equal(state.annotations.get('e4'),'yellow');assert.equal(app.annotations.size,0);
  }finally{if(old===undefined)delete globalThis.document;else globalThis.document=old}
 });
+
+test('annotation palette binds when closed and when four colors are visible',()=>{
+ let click,changes=0;
+ const pencil={addEventListener:(type,fn)=>{assert.equal(type,'click');click=fn}};
+ const colors=['red','yellow','green','blue'].map(annColor=>({dataset:{annColor}}));
+ let visible=false;
+ const root={querySelector:selector=>selector==='[data-pencil]'?pencil:null,querySelectorAll:selector=>selector==='[data-ann-color]'&&visible?colors:[]};
+ const app={annotation:{open:false,color:'yellow'}};
+ const update=()=>changes++;
+ boardMethods.bindAnnotationPanel.call(app,root,update);
+ click();assert.equal(app.annotation.open,true);assert.equal(changes,1);
+ visible=true;boardMethods.bindAnnotationPanel.call(app,root,update);
+ for(const color of colors){color.onclick();assert.equal(app.annotation.color,color.dataset.annColor)}
+ assert.equal(changes,5);
+});

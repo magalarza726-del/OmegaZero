@@ -67,7 +67,6 @@ export const chess960ResearchMethods={
   const pause=v.querySelector('[data-960-pause]');if(pause)pause.onclick=()=>{l.paused=!l.paused;if(!l.paused)l.detail='';clearTimeout(l.timer);l.timer=null;this.render960Research()};
   const palette=v.querySelector('[data-960-annotation]');
   const bindPalette=()=>this.bindAnnotationPanel(palette,()=>{palette.innerHTML=this.annotationPanel();bindPalette()});
-  bindPalette();
   const paintMarks=b=>{
    const el=v.querySelector('[data-960-board="'+b+'"]'),state=l.marks[b];
    if(!el)return;
@@ -104,7 +103,7 @@ export const chess960ResearchMethods={
    });
   };
   v.querySelectorAll('[data-960-board]').forEach(el=>{
-   const b=el.getAttribute('data-960-board');this.bindKeyboardBoard(el);el.oncontextmenu=e=>e.preventDefault();
+   const b=el.getAttribute('data-960-board');el.closest('.board-wrap').oncontextmenu=e=>e.preventDefault();this.bindKeyboardBoard(el);
    el.querySelectorAll('[data-square]').forEach(btn=>{
     const sq=btn.dataset.square;
     btn.onclick=()=>{
@@ -135,6 +134,7 @@ export const chess960ResearchMethods={
     btn.onpointercancel=e=>{this.cancelRightAnnotation(e);if(this.drag?.context==='research960')this.endVisualDrag(e,()=>{},{cancel:true})};
    });
   });
+  bindPalette();
   if(!human&&!l.result&&!l.paused&&!l.busy&&!l.timer)l.timer=setTimeout(async()=>{
    l.timer=null;if(this.screen!=='research960'||this.research960!==l||l.paused||l.result)return;
    l.busy=true;this.render960Research();
