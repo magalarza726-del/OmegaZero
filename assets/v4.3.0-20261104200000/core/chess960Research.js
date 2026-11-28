@@ -70,7 +70,7 @@ function terminal(l){
  if(l.classic.isGameOver())return 'Fin de la partida clásica';return null;
 }
 export function play960Research(l,b,request){
- if(l.result)return false;
+ if(l.result||!request)return false;
  const m=researchMoves(l,b,request.from).find(n=>n.to===request.to&&(n.castle||'')===(request.castle||castleSide(request)||'')&&(n.promotion||'')===(request.promotion||''));
  if(!m)return false;
  const n=match(l,b,m);l.selected=null;
