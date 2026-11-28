@@ -29,10 +29,10 @@ export const MATH_SYMBOLS=Object.freeze({
  sin:'\\sin\\left(#0\\right)',cos:'\\cos\\left(#0\\right)',
  if:'\\left\\{#?:#?,#?\\right\\}',plus:'+',minus:'-',times:'\\cdot',equals:'=',paren:'\\left(#0\\right)'
 });
-export const splitExpressions=value=>String(value??'').split(/\r?\n|;/).filter(s=>s.trim()).slice(0,40);
+export const splitExpressions=value=>String(value??'').split(/\r?\n|(?<!\\);/).filter(s=>s.trim()).slice(0,40);
 export function mountExpressionEditor(host,initial,onChange){
  let active=null,rows=[],raw=null,source=String(initial??''),ready=false,disposed=false;
- const getValue=()=>raw?raw.value:ready?rows.map(r=>r.field.getValue('latex')).filter(s=>s.trim()).join('\n'):source;
+ const getValue=()=>raw?raw.value:ready?rows.map(r=>r.value).filter(s=>s.trim()).join('\n'):source;
  const changed=()=>{source=getValue();onChange(source)};
  const activate=row=>{active=row;rows.forEach(r=>r.el.classList.toggle('is-active',r===row))};
  function renumber(){rows.forEach((r,i)=>{r.num.textContent=String(i+1);r.field.setAttribute('aria-label','Expresión '+(i+1));r.del.setAttribute('aria-label','Eliminar expresión '+(i+1))})}
@@ -47,18 +47,18 @@ export function mountExpressionEditor(host,initial,onChange){
   field.setAttribute('aria-label','Expresión matemática');
   const del=document.createElement('button');del.type='button';del.className='ecom-equation-delete';del.textContent='×';
   el.append(num,field,del);
-  const row={el,num,field,del};
+  const row={el,num,field,del,value};
   const index=after?rows.indexOf(after)+1:rows.length;
   const list=host.querySelector('.ecom-equation-list');
   list.insertBefore(el,rows[index]?.el||null);rows.splice(index,0,row);
   field.setValue(value,{silenceNotifications:true});
   field.addEventListener('focusin',()=>activate(row));
   field.addEventListener('pointerdown',()=>activate(row));
-  field.addEventListener('input',()=>{activate(row);changed()});
+  field.addEventListener('input',()=>{row.value=field.getValue('latex');activate(row);changed()});
   field.addEventListener('keydown',e=>{
    if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();e.stopPropagation();const next=rows[rows.indexOf(row)+1];if(next){activate(next);next.field.focus()}else add('',true,row)}
   });
-  del.onclick=()=>{if(rows.length===1){field.setValue('',{silenceNotifications:true});activate(row);field.focus();changed();return}
+  del.onclick=()=>{if(rows.length===1){field.setValue('',{silenceNotifications:true});row.value='';activate(row);field.focus();changed();return}
    const idx=rows.indexOf(row);rows.splice(idx,1);el.remove();renumber();const next=rows[Math.min(idx,rows.length-1)];activate(next);next.field.focus();changed()};
   renumber();if(focus){activate(row);field.focus();changed()}return row;
  }
@@ -90,9 +90,9 @@ export function mountExpressionEditor(host,initial,onChange){
   if(!ready)return;
   const row=active||rows[0];if(!row)return;
   // Toolbar buttons preserve selection via pointerdown prevention.
-  row.field.focus();row.field.insert(latex,{format:'latex',selectionMode:placeholder?'placeholder':'after'});changed();
+  row.field.focus();row.field.insert(latex,{format:'latex',selectionMode:placeholder?'placeholder':'after'});row.value=row.field.getValue('latex');changed();
  }
- function command(cmd){if(!ready||!active)return;active.field.focus();active.field.executeCommand(cmd);changed()}
+ function command(cmd){if(!ready||!active)return;active.field.focus();active.field.executeCommand(cmd);active.value=active.field.getValue('latex');changed()}
  const api={get value(){return getValue()},set value(v){setValue(v)},insert,command,addLine(){if(raw){insert('\n');return}if(ready)add('',true,active)},destroy(){disposed=true}};
  begin();return api;
 }
