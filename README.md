@@ -2,6 +2,13 @@
 
 OmegaZero: Chess Laboratory — aplicación web para jugar, aprender e investigar ajedrez con Stockfish y modelos experimentales.
 
+## 960 Research · 960-COM (v4.4.0)
+
+- Acceso desde Investigar, Modelos COM o las tres modalidades de Jugar. Posición aleatoria o número Scharnagl 0–959 (518 = clásica).
+- El motor Stockfish analiza exclusivamente la posición clásica. Cada pieza conserva su identidad: torres y caballos por orden inicial, alfiles por color de casilla, peones por columna. Las jugadas comparten destino absoluto y las capturas deben eliminar la misma identidad; enroques por flanco.
+- Al no existir una réplica legal, la sesión se detiene con «Fin por movimiento ilegal». Si la jugada nació en 960 y era legal allí, se conserva solo en 960. Selección sincronizada, historial de ambas posiciones y pausa para COM.
+- Pruebas del núcleo en `tests/chess960Research.test.js`.
+
 ## v4.4.0
 
 - E-COM multivariable: 20 métricas posicionales, funciones independientes por bando, expresiones matemáticas con sintaxis LaTeX compatible y vista MathML local, constantes, funciones auxiliares y expresiones por tramos.
