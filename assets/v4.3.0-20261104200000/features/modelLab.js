@@ -13,7 +13,8 @@ export const modelLabMethods={
   v.innerHTML=`<section class="page-head model-lab-head"><button data-model-back>←</button><div><small>INVESTIGAR · CEREBROS INTERCAMBIABLES</small><h1>Modelos COM</h1><p>Aquí se construyen y calibran los modelos. Para jugar, elige S-COM, T-COM o E-COM desde J1 vs COM o COM vs COM.</p></div></section><nav class="model-lab-tabs" role="tablist">${['s','t','e'].map(id=>`<button data-model-tab="${id}" class="${tab===id?'active':''}">${brainLabel(id)}</button>`).join('')}</nav>${tab==='t'?tBody:tab==='e'?ecomFunctionPanel(this)+`<details class="ecom-legacy"><summary>Modelo energético original U / K / E</summary>${eBody}</details>`:sBody}`;
   if(tab==='e')bindEcomFunctionPanel(this);
   $('[data-model-back]')?.addEventListener('click',()=>{this.screen='home';this.render()});
-  $$('[data-model-tab]').forEach(button=>button.onclick=()=>{this.modelLabTab=button.dataset.modelTab;this.renderModelLab()});
+  const researchButton=document.createElement('button');researchButton.type='button';researchButton.textContent='960-COM';researchButton.onclick=()=>{this.research960Return='modelLab';this.research960Config=null;this.screen='research960';this.render()};v.querySelector('.model-lab-tabs')?.append(researchButton);
+  $('[data-model-tab]').forEach(button=>button.onclick=()=>{this.modelLabTab=button.dataset.modelTab;this.renderModelLab()});
   $('[data-open-tcom]')?.addEventListener('click',()=>{this.screen='tcomLab';this.render()});
   $$('[data-model-play]').forEach(button=>button.onclick=()=>{this.cfg.mode='pvc';this.cfg.brain=button.dataset.modelPlay;this.ensureOpponentConfigs();this.cfg.opponents[0].brain=this.cfg.brain;this.screen='setup';this.render()});
   $('[data-model-energy-analysis]')?.addEventListener('click',()=>{this.analysisLayers={...(this.analysisLayers||{}),energy:true};this.db.settings.analysisLayers={...this.analysisLayers};saveDb(this.db);this.analysisReturn=null;this.screen='analysis';this.render()});
