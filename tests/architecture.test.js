@@ -62,3 +62,14 @@ test('la refactorización conserva el namespace de datos de v2',()=>{
   assert.ok(research.includes('this.chooseComBrainDecision('));
   assert.ok(!research.includes('this.engine.analyse('));
 });
+
+test('los botones de panel no sobrescriben las casillas del tablero compartido',()=>{
+  for(const name of ['styles-base.css','styles-dashboard.css']){
+    const css=readFileSync(join(asset,name),'utf8');
+    assert.ok(css.includes('.panel button:not(.primary):not(.sq)'));
+    assert.ok(!/\.panel button:not\(\.primary\)\s*\{/.test(css));
+  }
+  const research=readFileSync(join(features,'chess960Research.js'),'utf8');
+  assert.ok(research.includes('class="research960-boards"'));
+  assert.ok(research.includes('class="panel research960-game"'));
+});

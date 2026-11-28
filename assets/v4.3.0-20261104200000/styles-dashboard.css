@@ -136,7 +136,7 @@ html,body,#app{background:#141212;color:var(--oz-text)}
 .oz-vibrant .hint,.oz-vibrant .home-grid em{color:#c3c5b3}
 .oz-vibrant .form-grid input,.oz-vibrant .form-grid select,.oz-vibrant .panel input:not([type=checkbox]):not([type=radio]):not([type=range]),.oz-vibrant .panel select{background:#191f1a;border-color:#8c9e7755;color:#fff0df}
 .oz-vibrant .form-grid label,.oz-vibrant .panel label{color:#d8cebc}
-.oz-vibrant .actions button,.oz-vibrant .row button,.oz-vibrant .panel button:not(.primary){background-color:#333d2e;border-color:#889e6555;color:#ffedda}
+.oz-vibrant .actions button,.oz-vibrant .row button,.oz-vibrant .panel button:not(.primary):not(.sq){background-color:#333d2e;border-color:#889e6555;color:#ffedda}
 .oz-vibrant .evalbox,.oz-vibrant .moves,.oz-vibrant .clocks span{background:#191e19}
 .oz-vibrant .oz-game-matrices{background:#24392a;border-color:#769d6455}
 .oz-vibrant .oz-game-matrices>small{color:#d7d9b7}
@@ -191,3 +191,15 @@ html,body,#app{background:#141212;color:var(--oz-text)}
 .ecom-result-scroll th:first-child{z-index:2}.ecom-result-scroll td:first-child{z-index:1}.ecom-result-scroll tr.ecom-best td{background:#335b3c;color:#efffe9;font-weight:700}
 .ecom-legacy{margin:16px 0;border:1px solid #b9aa7444;border-radius:10px;padding:10px}.ecom-legacy>summary{cursor:pointer;color:#eacb8b;padding:8px;font-weight:600}
 @media(max-width:850px){.ecom-builder{grid-template-columns:1fr}.ecom-variable-list{max-height:290px}.ecom-function-lab>header{flex-wrap:wrap}}
+
+/* 960 Research: use the shared board palette and fit both boards in the viewport. */
+#view:has(.research960-game){padding-top:12px!important;padding-bottom:24px}
+.research960-game.panel{padding:14px;min-width:0}
+.research960-game .research960-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.research960-game .research960-toolbar button{padding:6px 10px}
+.research960-boards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;max-width:1100px;margin:0 auto}
+.research960-boards>section{min-width:0;width:100%}
+.research960-boards h2{font-size:1rem;margin:0 0 6px;text-align:center}
+.research960-boards .board-stage{width:min(100%,max(240px,calc(100vh - 235px)));margin:0 auto}
+.research960-boards .board-wrap{width:100%;max-width:none}
+@media(max-width:700px){.research960-boards{grid-template-columns:minmax(0,1fr);gap:14px}.research960-boards .board-stage{width:min(100%,440px)}.research960-game.panel{padding:8px}}
