@@ -1,8 +1,8 @@
 import { Chess } from '../vendor/chess.js';
 import { MULTIVARIATE_PARAMETERS, chooseMultivariateMoveOnePly } from '../core/multivariateChess.js';
-import { compileEcomFormula, DEFAULT_ECOM_FORMULA } from '../core/ecomExpressions.js';
+import { compileEcomFormula, DEFAULT_ECOM_FORMULA } from '../core/ecomExpressions.js?v=20261128-math-editor';
 import { esc, $ } from '../app/deps.js';
-import { mountExpressionEditor, MATH_SYMBOLS } from './ecomMathEditor.js';
+import { mountExpressionEditor, MATH_SYMBOLS } from './ecomMathEditor.js?v=20261128-math-editor';
 
 export const ECOM_PRESETS=Object.freeze({
  balanced:DEFAULT_ECOM_FORMULA,
